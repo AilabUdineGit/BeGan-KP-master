@@ -1,3 +1,5 @@
+Note: this is the original readme file edited by the authors. Only changed some parts to make the project working.
+
 # Keyphrase-GAN
 This repository contains the code for the paper <a href="https://arxiv.org/abs/1909.12229">Keyphrase Generation for Scientific Articles using GANs</a>.We have built a novel adversarial method to improve upon the generation of keyphrases using supervised approaches.Our Implementation is built on the starter code from <a href = "https://github.com/kenchan0226/keyphrase-generation-rl"> keyphrase-generation-rl </a> and <a href = "https://github.com/memray/seq2seq-keyphrase-pytorch"> seq2seq-keyphrase-pytorch </a> . Pls comment any issues in the issues section.
 
