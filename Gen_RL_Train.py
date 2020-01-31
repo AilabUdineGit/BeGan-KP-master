@@ -96,7 +96,6 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std):
                                                 delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
                                                 src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
     # print('pred_str_2dlist = ', pred_str_2dlist)
-    
     target_str_2dlist = convert_list_to_kphs(trg)
     # print('target_str_2dlist = ', target_str_2dlist)
     # print('src = ', src, src.size())
