@@ -6,7 +6,7 @@ Created on Mon Jul  1 15:10:45 2019
 @author: r17935avinash
 """
 
-################################ IMPORT LIBRARIES ###############################################################
+# ############################### IMPORT LIBRARIES ###############################################################
 import torch
 import numpy as np
 import pykp.io
@@ -45,16 +45,18 @@ import random
 from torch import device 
 from hierarchal_attention_Discriminator import Discriminator
 from torch.nn import functional as F
-#####################################################################################################                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
-#def Check_Valid_Loss(valid_data_loader,D_model,batch,generator,opt,perturb_std):
+# ####################################################################################################
+# def Check_Valid_Loss(valid_data_loader,D_model,batch,generator,opt,perturb_std):
     
-##### TUNE HYPERPARAMETERS ##############
+# #### TUNE HYPERPARAMETERS ##############
 
-##  batch_reward_stat, log_selected_token_dist = train_one_batch(batch, generator, optimizer_rl, opt, perturb_std)
+# #  batch_reward_stat, log_selected_token_dist = train_one_batch(batch, generator, optimizer_rl, opt, perturb_std)
 #########################################################
 
 
 def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std):
+    # torch.save(one2many_batch, 'prova/one2many_batch.pt')  # gl saving tensors
+    # gl: one2many è una lista di 16 tensori o liste, ciascuno con 32 elementi (i tensori con una dimensione pari a 32)
     src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, _, title, title_oov, title_lens, title_mask = one2many_batch
     one2many = opt.one2many
     one2many_mode = opt.one2many_mode
@@ -69,7 +71,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std):
     if opt.title_guided:
         title = title.to(opt.device)
         title_mask = title_mask.to(opt.device)
-        
+
     eos_idx = opt.word2idx[pykp.io.EOS_WORD]
     delimiter_word = opt.delimiter_word
     batch_size = src.size(0)
@@ -78,8 +80,8 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std):
     reward_shaping = opt.reward_shaping
     baseline = opt.baseline
     match_type = opt.match_type
-    regularization_type = opt.regularization_type ## DNT
-    regularization_factor = opt.regularization_factor ##DNT
+    regularization_type = opt.regularization_type  # # DNT
+    regularization_factor = opt.regularization_factor  # # DNT
     devices = opt.device
     if regularization_type == 2:
         entropy_regularize = True
@@ -88,12 +90,16 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std):
     start_time = time.time()
     sample_list, log_selected_token_dist, output_mask, pred_eos_idx_mask, entropy, location_of_eos_for_each_batch, location_of_peos_for_each_batch = generator.sample(
         src, src_lens, src_oov, src_mask, oov_lists, opt.max_length, greedy=False, one2many=one2many,
-        one2many_mode=one2many_mode, num_predictions=num_predictions, perturb_std=perturb_std, entropy_regularize=entropy_regularize, title=title, title_lens=title_lens, title_mask=title_mask)
+        one2many_mode=one2many_mode, num_predictions=num_predictions, perturb_std=perturb_std,
+        entropy_regularize=entropy_regularize, title=title, title_lens=title_lens, title_mask=title_mask)
 
-    pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx, delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
-                              src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
-     
+    pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
+                                                delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
+                                                src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
+    # torch.save(pred_str_2dlist, 'prova/pred_str_2dlist.pt')  # gl saving tensors
+
     target_str_2dlist = convert_list_to_kphs(trg)
+    # torch.save(target_str_2dlist, 'prova/target_str_2dlist.pt')  # gl saving tensors
     """
      src = [batch_size,abstract_seq_len]
      target_str_2dlist = list of list of true keyphrases
@@ -110,6 +116,9 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std):
     h_kph_f_size = 0 
     len_list_t, len_list_f = [], []
     for idx, (src_list, pred_str_list, target_str_list) in enumerate(zip(src, pred_str_2dlist, target_str_2dlist)):
+        # torch.save(src_list, 'prova/src_list-idx0.pt')  # gl saving tensors
+        # torch.save(pred_str_list, 'prova/pred_str_list-idx0.pt')  # gl saving tensors
+        # torch.save(target_str_list, 'prova/target_str_list-idx0.pt')  # gl saving tensors
         batch_mine += 1
         if len(target_str_list) == 0 or len(pred_str_list) == 0:
             continue
@@ -125,7 +134,11 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std):
         if len(target_str_list) == 0 or len(pred_str_list) == 0:
             continue  
         h_abstract_t, h_kph_t = D_model.get_hidden_states(src_list, target_str_list)
+        # torch.save(h_abstract_t, 'prova/h_abstract_t-idx0.pt')  # gl saving tensors
+        # torch.save(h_kph_t, 'prova/h_kph_t-idx0.pt')  # gl saving tensors
         h_abstract_f, h_kph_f = D_model.get_hidden_states(src_list, pred_str_list)
+        # torch.save(h_abstract_f, 'prova/h_abstract_f-idx0.pt')  # gl saving tensors
+        # torch.save(h_kph_f, 'prova/h_kph_f-idx0.pt')  # gl saving tensors
         p1d = (0, 0, 0, h_kph_t_size - h_kph_t.size(1))
         p2d = (0, 0, 0, h_kph_f_size - h_kph_f.size(1))
         h_kph_t = F.pad(h_kph_t, p1d)
@@ -136,6 +149,10 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std):
         kph_f = torch.cat((kph_f, h_kph_f), dim=0)
     _, real_rewards, abstract_loss_real = D_model.calculate_context(abstract_t, kph_t, 1, len_list_t)
     _, fake_rewards, abstract_loss_fake = D_model.calculate_context(abstract_f, kph_f, 0, len_list_f)
+    # torch.save(real_rewards, 'prova/real_rewards.pt')  # gl saving tensors
+    # torch.save(abstract_loss_real, 'prova/abstract_loss_real.pt')  # gl saving tensors
+    # torch.save(fake_rewards, 'prova/fake_rewards.pt')  # gl saving tensors
+    # torch.save(abstract_loss_fake, 'prova/abstract_loss_fake.pt')  # gl saving tensors
     avg_batch_loss = (abstract_loss_real + abstract_loss_fake)
     avg_real = real_rewards
     avg_fake = fake_rewards
@@ -177,7 +194,7 @@ def main(opt):
     perturb_decay_factor = opt.perturb_decay_factor
     perturb_decay_mode = opt.perturb_decay_mode
     hidden_dim = opt.D_hidden_dim
-    embedding_dim = opt.D_embedding_dim 
+    embedding_dim = opt.D_embedding_dim
     n_layers = opt.D_layers
     if torch.cuda.is_available():
         D_model = Discriminator(opt.vocab_size, embedding_dim, hidden_dim, n_layers, opt.word2idx[pykp.io.PAD_WORD], opt.gpuid)
@@ -214,6 +231,7 @@ def main(opt):
                 perturb_std = final_perturb_std + (init_perturb_std - final_perturb_std) * math.exp(-1. * total_batch * perturb_decay_factor)
             elif perturb_decay_mode == 2:  # steps decay
                 perturb_std = init_perturb_std * math.pow(perturb_decay_factor, math.floor((1+total_batch)/4000))
+            # torch.save(batch, 'prova/batch.pt')  # gl
             avg_batch_loss, _, _ = train_one_batch(D_model, batch, generator, opt, perturb_std)
             torch.nn.utils.clip_grad_norm_(D_model.parameters(), clip)
             avg_batch_loss.backward()
