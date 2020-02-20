@@ -632,3 +632,14 @@ def interactive_predict_opts(parser):
     parser.add_argument('-ignore_when_blocking', nargs='+', type=str, default=['<sep>'],
                         help="""Ignore these strings when blocking repeats.
                            You want to block sentence delimiters.""")
+
+
+def bert_opts(parser):  # gl
+    parser.add_argument('-bert_model', action="store_true", default='BERT',
+                        help='Model from HuggingFace transformers (BERT, ALBERT, ... )')
+    parser.add_argument('-bert_labels', action="store_true", default=2,
+                        help='labels for discriminator classification (2 almost always)')
+    parser.add_argument('-bert_learning_rate', action="store_true", default=0.00004,
+                        help='learning rate for AdamW optimizer')
+    parser.add_argument('-use_bert_discriminator', action="store_true", default=True,
+                        help='if is to use bert discriminator')
