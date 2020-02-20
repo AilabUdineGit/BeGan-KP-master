@@ -14,9 +14,11 @@ from collections import defaultdict
 import numpy as np
 import sys
 
-#import torchtext
+# import torchtext
 import torch
 import torch.utils.data
+
+from utils import bert_utils
 
 PAD_WORD = '<pad>'
 UNK_WORD = '<unk>'
@@ -32,9 +34,13 @@ class KeyphraseDataset(torch.utils.data.Dataset):
         # keys of matter. `src_oov_map` is for mapping pointed word to dict, `oov_dict` is for determining the dim of predicted logit: dim=vocab_size+max_oov_dict_in_batch
         assert type in ['one2one', 'one2many']
         if type == 'one2one':
-            keys = ['src', 'trg', 'trg_copy', 'src_oov', 'oov_dict', 'oov_list']
+            # keys = ['src', 'trg', 'trg_copy', 'src_oov', 'oov_dict', 'oov_list']
+            keys = ['src', 'trg', 'trg_copy', 'src_oov', 'oov_dict', 'oov_list',  # gl
+                    'b_src_str', 'b_trg_str', 'b_tok_map', 'b_src', 'b_trg']
         elif type == 'one2many':
-            keys = ['src', 'src_oov', 'oov_dict', 'oov_list', 'src_str', 'trg_str', 'trg', 'trg_copy']
+            # keys = ['src', 'src_oov', 'oov_dict', 'oov_list', 'src_str', 'trg_str', 'trg', 'trg_copy']
+            keys = ['src', 'src_oov', 'oov_dict', 'oov_list', 'src_str', 'trg_str', 'trg', 'trg_copy',  # gl
+                    'b_src_str', 'b_trg_str', 'b_tok_map', 'b_src', 'b_trg']
 
         if title_guided:
             keys += ['title', 'title_oov']
@@ -93,9 +99,9 @@ class KeyphraseDataset(torch.utils.data.Dataset):
         return padded_batch, input_list_lens, input_mask
 
     def collate_fn_one2one(self, batches):
-        '''
+        """
         Puts each data field into a tensor with outer dimension batch size"
-        '''
+        """
         assert self.type == 'one2one', 'The type of dataset should be one2one.'
         if self.remove_src_eos:
             # source with oov words replaced by <unk>
@@ -144,7 +150,7 @@ class KeyphraseDataset(torch.utils.data.Dataset):
         src, src_lens, src_mask = self._pad(src)
         trg, trg_lens, trg_mask = self._pad(trg)
 
-        #trg_target, _, _ = self._pad(trg_target)
+        # trg_target, _, _ = self._pad(trg_target)
         trg_oov, _, _ = self._pad(trg_oov)
         src_oov, _, _ = self._pad(src_oov)
 
@@ -183,8 +189,8 @@ class KeyphraseDataset(torch.utils.data.Dataset):
                 assert len(b['trg']) == len(b['trg_copy'])
                 for trg_idx, (trg_phase, trg_phase_oov) in enumerate(zip(b['trg'], b['trg_copy'])):
                     # b['trg'] contains a list of targets (keyphrase), each target is a list of indices, 2d list of idx
-                #for trg_idx, a in enumerate(zip(b['trg'], b['trg_copy'])):
-                    #trg_phase, trg_phase_oov are list of idx
+                # for trg_idx, a in enumerate(zip(b['trg'], b['trg_copy'])):
+                    # trg_phase, trg_phase_oov are list of idx
                     if trg_phase[0] == self.word2idx[PEOS_WORD]:
                         if trg_idx == 0:
                             trg_concat += trg_phase
@@ -206,8 +212,8 @@ class KeyphraseDataset(torch.utils.data.Dataset):
                 trg_oov.append(trg_oov_concat)
         else:
             trg, trg_oov = None, None
-        #trg = [[t + [self.word2idx[EOS_WORD]] for t in b['trg']] for b in batches]
-        #trg_oov = [[t + [self.word2idx[EOS_WORD]] for t in b['trg_copy']] for b in batches]
+        # trg = [[t + [self.word2idx[EOS_WORD]] for t in b['trg']] for b in batches]
+        # trg_oov = [[t + [self.word2idx[EOS_WORD]] for t in b['trg_copy']] for b in batches]
 
         oov_lists = [b['oov_list'] for b in batches]
 
@@ -271,8 +277,7 @@ class KeyphraseDataset(torch.utils.data.Dataset):
                 trg_oov_concat = []
                 trg_size = len(b['trg'])
                 assert len(b['trg']) == len(b['trg_copy'])
-                for trg_idx, (trg_phase, trg_phase_oov) in enumerate(zip(b['trg'], b[
-                    'trg_copy'])):  # b['trg'] contains a list of targets, each target is a list of indices
+                for trg_idx, (trg_phase, trg_phase_oov) in enumerate(zip(b['trg'], b['trg_copy'])):  # b['trg'] contains a list of targets, each target is a list of indices
                     # for trg_idx, a in enumerate(zip(b['trg'], b['trg_copy'])):
                     # trg_phase, trg_phase_oov = a
                     if trg_idx == trg_size - 1:  # if this is the last keyphrase, end with <eos>
@@ -318,6 +323,7 @@ class KeyphraseDataset(torch.utils.data.Dataset):
 
         return src, src_lens, src_mask, src_oov, oov_lists, src_str, trg_str, trg, trg_oov, trg_lens, trg_mask, original_indices
 
+
 '''
 class KeyphraseDatasetTorchText(torchtext.data.Dataset):
     @staticmethod
@@ -342,8 +348,9 @@ class KeyphraseDatasetTorchText(torchtext.data.Dataset):
         super(KeyphraseDatasetTorchText, self).__init__(examples, fields, **kwargs)
 '''
 
+
 def load_json_data(path, name='kp20k', src_fields=['title', 'abstract'], trg_fields=['keyword'], trg_delimiter=';'):
-    '''
+    """
     To load keyphrase data from file, generate src by concatenating the contents in src_fields
     Input file should be json format, one document per line
     return pairs of (src_str, [trg_str_1, trg_str_2 ... trg_str_m])
@@ -354,7 +361,7 @@ def load_json_data(path, name='kp20k', src_fields=['title', 'abstract'], trg_fie
     :param trg_fields:
     :param trg_delimiter:
     :return:
-    '''
+    """
     src_trgs_pairs = []
     with codecs.open(path, "r", "utf-8") as corpus_file:
         for idx, line in enumerate(corpus_file):
@@ -372,13 +379,13 @@ def load_json_data(path, name='kp20k', src_fields=['title', 'abstract'], trg_fie
 
 
 def copyseq_tokenize(text):
-    '''
+    """
     The tokenizer used in Meng et al. ACL 2017
     parse the feed-in text, filtering and tokenization
     keep [_<>,\(\)\.\'%], replace digits to <digit>, split by [^a-zA-Z0-9_<>,\(\)\.\'%]
     :param text:
     :return: a list of tokens
-    '''
+    """
     # remove line breakers
     text = re.sub(r'[\r\n\t]', ' ', text)
     # pad spaces to the left and right of special punctuations
@@ -392,9 +399,8 @@ def copyseq_tokenize(text):
     return tokens
 
 
-def tokenize_filter_data(
-        src_trgs_pairs, tokenize, opt, valid_check=False):
-    '''
+def tokenize_filter_data(src_trgs_pairs, tokenize, opt, valid_check=False):
+    """
     tokenize and truncate data, filter examples that exceed the length limit
     :param src_trgs_pairs:
     :param tokenize:
@@ -403,7 +409,7 @@ def tokenize_filter_data(
     :param src_seq_length_trunc:
     :param trg_seq_length_trunc:
     :return:
-    '''
+    """
     return_pairs = []
     for idx, (src, trgs) in enumerate(src_trgs_pairs):
         src_filter_flag = False
@@ -498,29 +504,35 @@ def build_interactive_predict_dataset(tokenized_src, word2idx, idx2word, opt, ti
     return build_dataset(tokenized_src_trg_pairs, word2idx, idx2word, opt, mode='one2many', include_original=True, title_list=title_list)
 
 
-def build_dataset(src_trgs_pairs, word2idx, idx2word, opt, mode='one2one', include_original=False, title_list=None):
-    '''
+def build_dataset(src_trgs_pairs, word2idx, idx2word, opt, mode='one2one', include_original=False, title_list=None, bert_tokenizer=None):
+    """
     Standard process for copy model
+    :param title_list: (?) # gl
+    :param src_trgs_pairs: pairs of input source (the document) and target KPs  # gl
+    :param idx2word: index to word vocabulary  # gl
     :param mode: one2one or one2many
     :param include_original: keep the original texts of source and target
+    :param opt: project options  # gl
+    :param word2idx: word to index vocabulary  # gl
+    :param bert_tokenizer: BERT tokenizer
     :return:
-    '''
+    """
     return_examples = []
     oov_target = 0
     max_oov_len = 0
     max_oov_sent = ''
-    if title_list != None:
+    if title_list is not None:
         assert len(title_list) == len(src_trgs_pairs)
 
     for idx, (source, targets) in enumerate(src_trgs_pairs):
         # if w is not seen in training data vocab (word2idx, size could be larger than opt.vocab_size), replace with <unk>
-        #src_all = [word2idx[w] if w in word2idx else word2idx[UNK_WORD] for w in source]
+        # src_all = [word2idx[w] if w in word2idx else word2idx[UNK_WORD] for w in source]
         # if w's id is larger than opt.vocab_size, replace with <unk>
         src = [word2idx[w] if w in word2idx and word2idx[w] < opt.vocab_size else word2idx[UNK_WORD] for w in source]
 
         if title_list is not None:
             title_word_list = title_list[idx]
-            #title_all = [word2idx[w] if w in word2idx else word2idx[UNK_WORD] for w in title_word_list]
+            # title_all = [word2idx[w] if w in word2idx else word2idx[UNK_WORD] for w in title_word_list]
             title = [word2idx[w] if w in word2idx and word2idx[w] < opt.vocab_size else word2idx[UNK_WORD] for w in title_word_list]
 
         # create a local vocab for the current source text. If there're V words in the vocab of this string, len(itos)=V+2 (including <unk> and <pad>), len(stoi)=V+1 (including <pad>)
@@ -589,8 +601,26 @@ def build_dataset(src_trgs_pairs, word2idx, idx2word, opt, mode='one2one', inclu
             if any([w >= opt.vocab_size for w in trg_copy]):
                 oov_target += 1
 
+            if bert_tokenizer is not None:
+                bert_reader = bert_utils.Reader(bert_tokenizer)
+                b_target = target[:]
+                b_target = ' '.join(b_target)
+                # b_trg_str = [bert_tokenizer.tokenize(kp) for kp in target]
+                b_trg_str = bert_tokenizer.tokenize(b_target)
+                b_source = source[:]
+                b_source.insert(0, '[CLS]')
+                b_source.append('[SEP]')
+                b_src_str, b_tokens_map, _ = bert_reader.tokenize_with_map_to_origin(b_source)
+                b_src = bert_tokenizer.convert_tokens_to_ids(b_src_str)
+                b_trg = bert_tokenizer.convert_tokens_to_ids(b_trg_str)
+                example['b_src_str'] = b_src_str
+                example['b_trg_str'] = b_trg_str
+                example['b_tok_map'] = b_tokens_map
+                example['b_src'] = b_src
+                example['b_trg'] = b_trg
+
             if idx % 100 == 0:
-                print("afsdgs;",idx)
+                print("afsdgs;", idx)
                 print('-------------------- %s: %d ---------------------------' % (inspect.getframeinfo(inspect.currentframe()).function, idx))
                 print('source    \n\t\t[len=%d]: %s' % (len(source), source))
                 print('target    \n\t\t[len=%d]: %s' % (len(target), target))
@@ -614,6 +644,10 @@ def build_dataset(src_trgs_pairs, word2idx, idx2word, opt, mode='one2one', inclu
                 if any([w >= opt.vocab_size for w in trg_copy]):
                     print('Find OOV in target')
 
+                print('b_src_str         \n\t\t[len=%d]: %s' % (len(b_src_str), b_src_str))
+                print('b_trg_str         \n\t\t[len=%d]: %s' % (len(b_trg_str), b_trg_str))
+                print('b_tok_map         \n\t\t[len=%d]: %s' % (len(b_tokens_map), b_tokens_map))
+
                 # print('copy_martix      \n\t\t[len=%d]: %s' % (len(example["copy_martix"]), example["copy_martix"]))
                 # print('copy_index  \n\t\t[len=%d]: %s' % (len(example["copy_index"]), example["copy_index"]))
             
@@ -631,7 +665,7 @@ def build_dataset(src_trgs_pairs, word2idx, idx2word, opt, mode='one2one', inclu
             o2m_example = {}
             keys = examples[0].keys()
             for key in keys:
-                if key.startswith('src') or key.startswith('oov') or key.startswith('title'):
+                if key.startswith('src') or key.startswith('oov') or key.startswith('title') or key.startswith('b_src') or key.startswith('b_tok'):
                     o2m_example[key] = examples[0][key]
                 else:
                     o2m_example[key] = [e[key] for e in examples]
@@ -647,12 +681,11 @@ def build_dataset(src_trgs_pairs, word2idx, idx2word, opt, mode='one2one', inclu
                 assert len(o2m_example['title']) == len(o2m_example['title_oov'])
 
             return_examples.append(o2m_example)
-        if idx == 1000:
+        if idx == 1000:  # gl: questo taglia i dataset a 1000 elementi!
             break
 
-
     print('Find #(oov_target)/#(all) = %d/%d' % (oov_target, len(return_examples)))
-    print('Find max_oov_len = %d' % (max_oov_len))
+    print('Find max_oov_len = %d' % max_oov_len)
     print('max_oov sentence: %s' % str(max_oov_sent))
     return return_examples
 
@@ -690,17 +723,18 @@ def extend_vocab_OOV(source_words, word2idx, vocab_size, max_unk_words):
 
 
 def copy_martix(source, target):
-    '''
+    """
     For reproduce Gu's method
     return the copy matrix, size = [nb_sample, max_len_source, max_len_target]
     cc_matrix[i][j]=1 if i-th word in target matches the i-th word in source
-    '''
+    """
     cc = np.zeros((len(target), len(source)), dtype='float32')
     for i in range(len(target)):  # go over each word in target (all target have same length after padding)
         for j in range(len(source)):  # go over each word in source
             if source[j] == target[i]:  # if word match, set cc[k][j][i] = 1. Don't count non-word(source[k, i]=0)
                 cc[i][j] = 1.
     return cc
+
 
 '''
 def build_vocab(tokenized_src_trgs_pairs, opt):
