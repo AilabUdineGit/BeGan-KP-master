@@ -89,6 +89,8 @@ class Discriminator(S_RNN):
         total_kphs = len(kph)
         src = self.transform_src(src, total_kphs)
         kph = self.padded_all(kph, total_kphs, self.pad_idx)
+        # torch.save(src, 'prova/src.pt')  # gl saving tensors
+        # torch.save(kph, 'prova/kph.pt')  # gl saving tensors
         src, kph = src.long(), kph.long()
         h_abstract, h_kph = self.forward(src, kph)
         h_abstract, h_kph = h_abstract.unsqueeze(0), h_kph.unsqueeze(0)
@@ -166,11 +168,11 @@ class Discriminator(S_RNN):
         output = self.Linear(x)
         output = output.squeeze(1)
         total_len = output.size(0)
-        if target_type == 1:
+        if target_type == 1:  # gl: target_type=1 is for real KPs
             results = torch.ones(total_len) * 0.9
             if torch.cuda.is_available():
                 results = results.to(self.devices)
-        else:
+        else:  # gl: target_type=0 is for fake KPs
             results = torch.zeros(total_len)
             if torch.cuda.is_available():
                 results = results.to(self.devices)
