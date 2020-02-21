@@ -4,6 +4,7 @@ import torch
 import pickle
 import pykp.io
 import config
+from BERT_Discriminator import NetModel, NLPModel, NLP_MODELS  # gl
 
 
 def read_tokenized_src_file(path, remove_eos=True):
@@ -81,7 +82,7 @@ def read_tokenized_trg_file(path):
     data = []
     with open(path) as f:
         for line in f:
-            trg_list = line.strip().split(';') # a list of target sequences
+            trg_list = line.strip().split(';')  # a list of target sequences
             trg_word_list = [trg.split(' ') for trg in trg_list]
             data.append(trg_word_list)
     return data
@@ -201,23 +202,35 @@ def main(opt):
         tokenized_train_pairs = read_src_and_trg_files(opt.train_src, opt.train_trg, is_train=True, remove_eos=opt.remove_eos, title_guided=False)
         tokenized_train_title = None
 
+    # gl: tokenized_train_pairs è una list di 491412 tuple tipo (src tokens list, list of trg tokens list)
+    # es: src: ['virtually', 'enhancing', 'the', 'perception', 'of', 'user', 'actions', '.', 'this', 'paper', 'proposes', 'using', 'virtual', 'reality', 'to', 'enhance', 'the', 'perception', 'of', 'actions', 'by', 'distant', 'users', 'on', 'a', 'shared', 'application', '.', 'here', ',', 'distance', 'may', 'refer', 'either', 'to', 'space', '(', 'e.g.', 'in', 'a', 'remote', 'synchronous', 'collaboration', ')', 'or', 'time', '(', 'e.g.', 'during', 'playback', 'of', 'recorded', 'actions', ')', '.', 'our', 'approach', 'consists', 'in', 'immersing', 'the', 'application', 'in', 'a', 'virtual', 'inhabited', '3d', 'space', 'and', 'mimicking', 'user', 'actions', 'by', 'animating', 'avatars', '.', 'we', 'illustrate', 'this', 'approach', 'with', 'two', 'applications', ',', 'the', 'one', 'for', 'remote', 'collaboration', 'on', 'a', 'shared', 'application', 'and', 'the', 'other', 'to', 'playback', 'recorded', 'sequences'...
+    # es: trg: [['animation'], ['avatars'], ['telepresence'], ['application', 'sharing'], ['collaborative', 'virtual', 'environments']]
     # build vocab from training src
     # build word2id, id2word, and vocab, where vocab is a counter
     # with special tokens, '<pad>': 0, '<bos>': 1, '<eos>': 2, '<unk>': 3
     # word2id, id2word are ordered by frequencies, includes all the tokens in the data
     # simply concatenate src and target when building vocab
-    word2idx, idx2word, token_freq_counter = build_vocab(tokenized_train_pairs, opt.include_peos)
+    word2idx, idx2word, token_freq_counter = build_vocab(tokenized_train_pairs, opt.include_peos)  # gl 344733 elementi
 
-    # building preprocessed training set for one2one training mode
-    train_one2one = pykp.io.build_dataset(tokenized_train_pairs, word2idx, idx2word, opt, mode='one2one', include_original=True, title_list=tokenized_train_title)
+    if opt.use_bert_discriminator:
+        bert_model = NLP_MODELS[opt.bert_model].choose()  # gl
+        bert_tokenizer = bert_model.tokenizer  # gl
+    else:
+        bert_tokenizer = None
+
+    # building preprocessed training set for one2one training mode # gl: qui sotto avviene il troncamento ai primi 1001 elementi (siccome è one2one, in tot sono 4685
+    train_one2one = pykp.io.build_dataset(tokenized_train_pairs, word2idx, idx2word, opt, mode='one2one',
+                                          include_original=True, title_list=tokenized_train_title, bert_tokenizer=bert_tokenizer)
     # a list of dict, with fields src, trg, src_oov, oov_dict, oov_list, etc.
 
     print("Dumping train one2one to disk: %s" % (opt.data_dir + '/train.one2one.pt'))
     torch.save(train_one2one, open(opt.data_dir + '/train.one2one.pt', 'wb'))
     len_train_one2one = len(train_one2one)
     del train_one2one
+
     # building preprocessed training set for one2many training mode
-    train_one2many = pykp.io.build_dataset(tokenized_train_pairs, word2idx, idx2word, opt, mode='one2many', include_original=True, title_list=tokenized_train_title)
+    train_one2many = pykp.io.build_dataset(tokenized_train_pairs, word2idx, idx2word, opt, mode='one2many',
+                                           include_original=True, title_list=tokenized_train_title, bert_tokenizer=bert_tokenizer)
     print("Dumping train one2many to disk: %s" % (opt.data_dir + '/train.one2many.pt'))
     torch.save(train_one2many, open(opt.data_dir + '/train.one2many.pt', 'wb'))
     len_train_one2many = len(train_one2many)
@@ -243,13 +256,13 @@ def main(opt):
         tokenized_valid_title = None
 
     # building preprocessed validation set for one2one and one2many training mode
-    valid_one2one = pykp.io.build_dataset(
-        tokenized_valid_pairs, word2idx, idx2word, opt, mode='one2one', include_original=True, title_list=tokenized_valid_title)
-    valid_one2many = pykp.io.build_dataset(
-        tokenized_valid_pairs, word2idx, idx2word, opt, mode='one2many', include_original=True, title_list=tokenized_valid_title)
+    valid_one2one = pykp.io.build_dataset(tokenized_valid_pairs, word2idx, idx2word, opt, mode='one2one',
+                                          include_original=True, title_list=tokenized_valid_title, bert_tokenizer=bert_tokenizer)
+    valid_one2many = pykp.io.build_dataset(tokenized_valid_pairs, word2idx, idx2word, opt, mode='one2many',
+                                           include_original=True, title_list=tokenized_valid_title, bert_tokenizer=bert_tokenizer)
 
     print("Dumping valid to disk: %s" % (opt.data_dir + '/valid.pt'))
-    torch.save(valid_one2one, open(opt.data_dir+ '/valid.one2one.pt', 'wb'))
+    torch.save(valid_one2one, open(opt.data_dir + '/valid.one2one.pt', 'wb'))
     torch.save(valid_one2many, open(opt.data_dir + '/valid.one2many.pt', 'wb'))
 
     # Preprocess test data
@@ -272,10 +285,10 @@ def main(opt):
         tokenized_test_title = None
 
     # building preprocessed test set for one2one and one2many training mode
-    test_one2one = pykp.io.build_dataset(
-        tokenized_test_pairs, word2idx, idx2word, opt, mode='one2one', include_original=True, title_list=tokenized_test_title)
-    test_one2many = pykp.io.build_dataset(
-        tokenized_test_pairs, word2idx, idx2word, opt, mode='one2many', include_original=True, title_list=tokenized_test_title)
+    test_one2one = pykp.io.build_dataset(tokenized_test_pairs, word2idx, idx2word, opt, mode='one2one',
+                                         include_original=True, title_list=tokenized_test_title, bert_tokenizer=bert_tokenizer)
+    test_one2many = pykp.io.build_dataset(tokenized_test_pairs, word2idx, idx2word, opt, mode='one2many',
+                                          include_original=True, title_list=tokenized_test_title, bert_tokenizer=bert_tokenizer)
 
     print("Dumping test to disk: %s" % (opt.data_dir + '/valid.pt'))
     torch.save(test_one2one, open(opt.data_dir + '/test.one2one.pt', 'wb'))
@@ -308,6 +321,7 @@ def main(opt):
     '''
     return
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='preprocess.py', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
@@ -321,10 +335,11 @@ if __name__ == "__main__":
     parser.add_argument('-title_guided', action="store_true", help='Allow easy access to the title of the source text.')
 
     config.vocab_opts(parser)
-    #parser.add_argument('-vocab_size', default=50000, type=int, help='Max. number of words in vocab')
-    #parser.add_argument('-max_unk_words', default=1000, type=int, help='Max. number of words in OOV vocab')
+    config.bert_opts(parser)  # gl
+    # parser.add_argument('-vocab_size', default=50000, type=int, help='Max. number of words in vocab')
+    # parser.add_argument('-max_unk_words', default=1000, type=int, help='Max. number of words in OOV vocab')
     opt = parser.parse_args()
-    #opt = vars(args) # convert to dict
+    # opt = vars(args) # convert to dict
     opt.train_src = opt.data_dir + '/train_src.txt'
     opt.train_trg = opt.data_dir + '/train_trg.txt'
     opt.valid_src = opt.data_dir + '/valid_src.txt'

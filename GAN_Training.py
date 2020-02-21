@@ -9,6 +9,7 @@ Created on Fri Aug 23 22:41:50 2019
 import argparse
 import config
 from Disc_train import main as D_train
+from Bert_Disc_train import main as D_Bert_train
 from Gen_RL_Train import main as G_train
 import torch 
 import random
@@ -70,6 +71,7 @@ if __name__ == "__main__":
     config.model_opts(parser)
     config.train_opts(parser)
     config.dis_opts(parser)
+    config.bert_opts(parser)  # gl
     opt = parser.parse_args()   
     opt = process_opt(opt)
     if torch.cuda.is_available():
@@ -81,6 +83,10 @@ if __name__ == "__main__":
         opt.gpuid = -1
         print("CUDA is not available, fall back to CPU.")
     if opt.train_discriminator:
-        D_train(opt)
+        if opt.use_bert_discriminator:  # gl
+            D_Bert_train(opt)
+        else:
+            D_train(opt)
+
     elif opt.train_rl:
         G_train(opt)

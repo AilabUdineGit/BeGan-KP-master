@@ -45,6 +45,8 @@ import random
 from torch import device 
 from hierarchal_attention_Discriminator import Discriminator
 from torch.nn import functional as F
+from BERT_Discriminator import NetModel, NLPModel, NLP_MODELS
+from transformers import AdamW
 # ####################################################################################################
 # def Check_Valid_Loss(valid_data_loader,D_model,batch,generator,opt,perturb_std):
     
@@ -93,8 +95,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std):
         one2many_mode=one2many_mode, num_predictions=num_predictions, perturb_std=perturb_std,
         entropy_regularize=entropy_regularize, title=title, title_lens=title_lens, title_mask=title_mask)
 
-    pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
-                                                delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
+    pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx, delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
                                                 src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
     # torch.save(pred_str_2dlist, 'prova/pred_str_2dlist.pt')  # gl saving tensors
 
@@ -115,7 +116,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std):
     h_kph_t_size = 0
     h_kph_f_size = 0 
     len_list_t, len_list_f = [], []
-    for idx, (src_list, pred_str_list, target_str_list) in enumerate(zip(src, pred_str_2dlist, target_str_2dlist)):
+    for idx, (src_list, pred_str_list, target_str_list) in enumerate(zip(src, pred_str_2dlist, target_str_2dlist)):  # gl: idx è l'indice del batch (0, ..., 31)
         # torch.save(src_list, 'prova/src_list-idx0.pt')  # gl saving tensors
         # torch.save(pred_str_list, 'prova/pred_str_list-idx0.pt')  # gl saving tensors
         # torch.save(target_str_list, 'prova/target_str_list-idx0.pt')  # gl saving tensors
@@ -129,7 +130,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std):
         h_kph_t_size = max(h_kph_t_size, h_kph_t.size(1))
         h_kph_f_size = max(h_kph_f_size, h_kph_f.size(1))
     
-    for idx, (src_list, pred_str_list, target_str_list) in enumerate(zip(src, pred_str_2dlist, target_str_2dlist)):
+    for idx, (src_list, pred_str_list, target_str_list) in enumerate(zip(src, pred_str_2dlist, target_str_2dlist)):  # gl: idx cicla sui batch
         batch_mine += 1
         if len(target_str_list) == 0 or len(pred_str_list) == 0:
             continue  
@@ -143,7 +144,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std):
         p2d = (0, 0, 0, h_kph_f_size - h_kph_f.size(1))
         h_kph_t = F.pad(h_kph_t, p1d)
         h_kph_f = F.pad(h_kph_f, p2d)
-        abstract_t = torch.cat((abstract_t, h_abstract_t), dim=0)
+        abstract_t = torch.cat((abstract_t, h_abstract_t), dim=0)  # gl: qui gli hidden states estratti vengono concatenati in modo che alla fine si abbia comunque un tesnore con dim(0) pari a 32 cioè batch size
         abstract_f = torch.cat((abstract_f, h_abstract_f), dim=0)
         kph_t = torch.cat((kph_t, h_kph_t), dim=0)
         kph_f = torch.cat((kph_f, h_kph_f), dim=0)
@@ -163,6 +164,7 @@ def main(opt):
     clip = 5
     start_time = time.time()
     train_data_loader, valid_data_loader, word2idx, idx2word, vocab = load_data_and_vocab(opt, load_train=True)
+    # torch.save(train_data_loader, 'prova/train_data_loader.pt')  # gl
     load_data_time = time_since(start_time)
     logging.info('Time for loading the data: %.1f' % load_data_time)
     
@@ -193,13 +195,16 @@ def main(opt):
     final_perturb_std = opt.final_perturb_std
     perturb_decay_factor = opt.perturb_decay_factor
     perturb_decay_mode = opt.perturb_decay_mode
-    hidden_dim = opt.D_hidden_dim
-    embedding_dim = opt.D_embedding_dim
-    n_layers = opt.D_layers
+    hidden_dim = opt.D_hidden_dim  # gl: modificare con i dati BERT
+    embedding_dim = opt.D_embedding_dim  # gl: modificare con i dati BERT
+    n_layers = opt.D_layers  # gl: modificare con i dati BERT
+    bert_model = NLP_MODELS[opt.bert_model].choose()  # gl
+    D_model = NetModel.from_pretrained(bert_model.pretrained_weights, num_labels=opt.bert_labels)  # gl
     if torch.cuda.is_available():
-        D_model = Discriminator(opt.vocab_size, embedding_dim, hidden_dim, n_layers, opt.word2idx[pykp.io.PAD_WORD], opt.gpuid)
-    else:
-        D_model = Discriminator(opt.vocab_size, embedding_dim, hidden_dim, n_layers, opt.word2idx[pykp.io.PAD_WORD], "cpu")
+        # D_model = Discriminator(opt.vocab_size, embedding_dim, hidden_dim, n_layers, opt.word2idx[pykp.io.PAD_WORD], opt.gpuid)
+        D_model = D_model.cuda()  # gl
+    # else:
+    #     D_model = Discriminator(opt.vocab_size, embedding_dim, hidden_dim, n_layers, opt.word2idx[pykp.io.PAD_WORD], "cpu")
     print("The Discriminator Description is ", D_model)
     if opt.pretrained_Discriminator:
         if torch.cuda.is_available():
@@ -212,7 +217,24 @@ def main(opt):
             D_model = D_model.to(opt.gpuid)
         else:
             D_model.load_state_dict(torch.load(opt.Discriminator_model_path, map_location="cpu"))
-    D_optimizer = torch.optim.Adam(D_model.parameters(), opt.learning_rate)
+
+    FULL_FINETUNING = True  # gl: che significa? eventualmente chiedere a Cancian
+    if FULL_FINETUNING:
+        param_optimizer = list(D_model.named_parameters())
+        no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
+        # no_decay = ['bias', 'gamma', 'beta']
+        optimizer_grouped_parameters = [
+            {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)],
+             'weight_decay_rate': 0.01},
+            {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)],
+             'weight_decay_rate': 0.0}
+        ]
+    else:
+        param_optimizer = list(D_model.classifier.named_parameters())
+        optimizer_grouped_parameters = [{'params': [p for n, p in param_optimizer]}]
+    D_optimizer = AdamW(optimizer_grouped_parameters, opt.bert_learning_rate, correct_bias=False)
+
+    # D_optimizer = torch.optim.Adam(D_model.parameters(), opt.learning_rate)
     print("Beginning with training Discriminator")
     print("########################################################################################################")
     total_epochs = 5
@@ -231,7 +253,7 @@ def main(opt):
                 perturb_std = final_perturb_std + (init_perturb_std - final_perturb_std) * math.exp(-1. * total_batch * perturb_decay_factor)
             elif perturb_decay_mode == 2:  # steps decay
                 perturb_std = init_perturb_std * math.pow(perturb_decay_factor, math.floor((1+total_batch)/4000))
-            # torch.save(batch, 'prova/batch.pt')  # gl
+            # torch.save(batch, 'prova/batch.pt')  # gl saving tensors
             avg_batch_loss, _, _ = train_one_batch(D_model, batch, generator, opt, perturb_std)
             torch.nn.utils.clip_grad_norm_(D_model.parameters(), clip)
             avg_batch_loss.backward()
@@ -257,7 +279,7 @@ def main(opt):
                 if best_valid_loss > valid_loss_total.item() / total:
                     print("Loss Decreases so saving the file ...............----------->>>>>")
                     state_dfs = D_model.state_dict()
-                    torch.save(state_dfs, "Discriminator_checkpts/Attention_Disriminator_" + str(epoch) + ".pth.tar")
+                    torch.save(state_dfs, "Discriminator_checkpts/Bert_Discriminator_" + str(epoch) + ".pth.tar")
                     best_valid_loss = valid_loss_total.item() / total
 
 ######################################
