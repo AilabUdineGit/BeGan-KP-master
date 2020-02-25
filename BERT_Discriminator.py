@@ -70,7 +70,17 @@ class NLPModel:
     def choose(self, model_config=None):
         self.tokenizer = self.tokenizer.from_pretrained(self.pretrained_weights)
         self.model = self.model.from_pretrained(self.pretrained_weights, config=model_config)
+        num_added_toks = self.tokenizer.add_tokens(['<digit>'])  # gl: aggiunto il token <digit> che ora viene considerato come una parola.
+        self.model.resize_token_embeddings(len(self.tokenizer))
+        self.add_specific_tokens()
         return self
+
+    def add_specific_tokens(self):
+        # special_tokens_dict = {'eos_token': '[EOS]', 'unk_token': '[UNK]'}
+        special_tokens_dict = {'eos_token': '<eos>'}
+        num_added_tok = self.tokenizer.add_special_tokens(special_tokens_dict)
+        self.model.resize_token_embeddings(len(self.tokenizer))
+        return num_added_tok
 
 
 NLP_MODELS = {  # models from transformers library
