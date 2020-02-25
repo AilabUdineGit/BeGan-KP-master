@@ -20,13 +20,13 @@ import torch.utils.data
 
 from utils import bert_utils
 
-PAD_WORD = '<pad>'
-UNK_WORD = '<unk>'
-BOS_WORD = '<bos>'
-EOS_WORD = '<eos>'
-SEP_WORD = '<sep>'
-DIGIT = '<digit>'
-PEOS_WORD = '<peos>'
+PAD_WORD = '<pad>'  # gl: idx=0
+UNK_WORD = '<unk>'  # gl: idx=3
+BOS_WORD = '<bos>'  # gl: idx=1
+EOS_WORD = '<eos>'  # gl: idx=2
+SEP_WORD = '<sep>'  # gl: idx=4
+DIGIT = '<digit>'  # gl: idx=23
+PEOS_WORD = '<peos>'  # gl: idx=5
 
 
 class KeyphraseDataset(torch.utils.data.Dataset):
@@ -35,12 +35,10 @@ class KeyphraseDataset(torch.utils.data.Dataset):
         assert type in ['one2one', 'one2many']
         if type == 'one2one':
             # keys = ['src', 'trg', 'trg_copy', 'src_oov', 'oov_dict', 'oov_list']
-            keys = ['src', 'trg', 'trg_copy', 'src_oov', 'oov_dict', 'oov_list',  # gl
-                    'b_src_str', 'b_trg_str', 'b_tok_map', 'b_src', 'b_trg']
+            keys = ['src', 'trg', 'trg_copy', 'src_oov', 'oov_dict', 'oov_list', 'b_src_str', 'b_trg_str', 'b_tok_map', 'b_src', 'b_trg']
         elif type == 'one2many':
             # keys = ['src', 'src_oov', 'oov_dict', 'oov_list', 'src_str', 'trg_str', 'trg', 'trg_copy']
-            keys = ['src', 'src_oov', 'oov_dict', 'oov_list', 'src_str', 'trg_str', 'trg', 'trg_copy',  # gl
-                    'b_src_str', 'b_trg_str', 'b_tok_map', 'b_src', 'b_trg']
+            keys = ['src', 'src_oov', 'oov_dict', 'oov_list', 'src_str', 'trg_str', 'trg', 'trg_copy', 'b_src_str', 'b_trg_str', 'b_tok_map', 'b_src', 'b_trg']
 
         if title_guided:
             keys += ['title', 'title_oov']
@@ -158,7 +156,7 @@ class KeyphraseDataset(torch.utils.data.Dataset):
 
     def collate_fn_one2many(self, batches):
         assert self.type == 'one2many', 'The type of dataset should be one2many.'
-        if self.remove_src_eos:
+        if self.remove_src_eos:  # gl False
             # source with oov words replaced by <unk>
             src = [b['src'] for b in batches]
             # extended src (oov words are replaced with temporary idx, e.g. 50000, 50001 etc.)
@@ -169,13 +167,20 @@ class KeyphraseDataset(torch.utils.data.Dataset):
             # extended src (oov words are replaced with temporary idx, e.g. 50000, 50001 etc.)
             src_oov = [b['src_oov'] + [self.word2idx[EOS_WORD]] for b in batches]
 
-        if self.title_guided:
+        if self.title_guided:  # gl False
             title = [b['title'] for b in batches]
             title_oov = [b['title_oov'] for b in batches]
         else:
             title, title_oov, title_lens, title_mask = None, None, None, None
 
         batch_size = len(src)
+
+        # gl Bert values
+        b_src = [b['b_src'] for b in batches]
+        b_trg = [b['b_trg'] for b in batches]
+        b_src_str = [b['b_src_str'] for b in batches]
+        b_tok_map = [b['b_tok_map'] for b in batches]
+        b_trg_str = [b['b_trg_str'] for b in batches]
 
         # trg: a list of concatenated targets, the targets in a concatenated target are separated by a delimiter, oov replaced by UNK
         # trg_oov: a list of concatenated targets, the targets in a concatenated target are separated by a delimiter, oovs are replaced with temporary idx, e.g. 50000, 50001 etc.)
@@ -256,7 +261,8 @@ class KeyphraseDataset(torch.utils.data.Dataset):
             title, title_lens, title_mask = self._pad(title)
             title_oov, _, _ = self._pad(title_oov)
 
-        return src, src_lens, src_mask, src_oov, oov_lists, src_str, trg_str, trg, trg_oov, trg_lens, trg_mask, original_indices, title, title_oov, title_lens, title_mask
+        return src, src_lens, src_mask, src_oov, oov_lists, src_str, trg_str, trg, trg_oov, trg_lens, trg_mask, \
+            original_indices, title, title_oov, title_lens, title_mask, b_src, b_trg, b_src_str, b_trg_str, b_tok_map
 
     def collate_fn_one2many_hier(self, batches):
         assert self.type == 'one2many', 'The type of dataset should be one2many.'
