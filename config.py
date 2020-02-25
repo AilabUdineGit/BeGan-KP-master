@@ -275,7 +275,7 @@ def train_opts(parser):
     #                    help="""0: ori, 1: running average as baseline""")
     parser.add_argument('-max_sample_length', default=6, type=int,
                         help="The max length of sequence that can be sampled by the model")
-    parser.add_argument('-max_length', type=int, default=6,
+    parser.add_argument('-max_length', type=int, default=12,  # gl was 6, raised to 12 to increment the number of pred. KPs
                         help='Maximum prediction length.')
     parser.add_argument('-topk', type=str, default='M',
                         help='The only pick the top k predictions in reward.')

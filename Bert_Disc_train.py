@@ -56,10 +56,11 @@ from transformers import AdamW
 #########################################################
 
 
-def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std):
+def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_tokenizer):
     # torch.save(one2many_batch, 'prova/one2many_batch.pt')  # gl saving tensors
     # gl: one2many è una lista di 16 tensori o liste, ciascuno con 32 elementi (i tensori con una dimensione pari a 32)
-    src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, _, title, title_oov, title_lens, title_mask = one2many_batch
+    src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, \
+        _, title, title_oov, title_lens, title_mask, b_src, b_trg, b_src_str, b_trg_str, b_tok_map = one2many_batch
     one2many = opt.one2many
     one2many_mode = opt.one2many_mode
     if one2many and one2many_mode > 1:
@@ -75,7 +76,9 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std):
         title_mask = title_mask.to(opt.device)
 
     eos_idx = opt.word2idx[pykp.io.EOS_WORD]
+    # print('eos_idx=' + str(eos_idx))  # gl: eos_idx=2
     delimiter_word = opt.delimiter_word
+    # print('delimiter_word=' + str(delimiter_word))  # gl: delimiter_word=<sep>; sep_idx=4
     batch_size = src.size(0)
     topk = opt.topk
     reward_type = opt.reward_type
@@ -95,9 +98,33 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std):
         one2many_mode=one2many_mode, num_predictions=num_predictions, perturb_std=perturb_std,
         entropy_regularize=entropy_regularize, title=title, title_lens=title_lens, title_mask=title_mask)
 
-    pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx, delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
+    pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
+                                                delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
                                                 src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
+    # torch.save(pred_str_kps, 'prova/pred_str_kps.pt')  # gl saving tensors
     # torch.save(pred_str_2dlist, 'prova/pred_str_2dlist.pt')  # gl saving tensors
+
+    # gl: qui tradurre pred_str_2dlist in Bert tokens
+    pred_str_kps_list = [[[opt.idx2word[w] for w in kp] for kp in b] for b in pred_str_2dlist]
+    print(pred_str_kps_list)
+    pred_str_list = []
+    pred_idx_list = []
+    for b in pred_str_kps_list:
+        pred_str_kps = ''
+        for kp in b:
+            for w in kp:
+                if w == pykp.io.DIGIT:
+                    w = '<digit>'  # gl: token inserito nel vocabolario di Bert corrispondente a <digit>
+                elif w == pykp.io.UNK_WORD:
+                    w = '[UNK]'
+                else:  # gl: tutte le altre parole sono invalide e rendono la KP sbagliata (lasciare i valori
+                    1 == 1  # lasciando la parola inalterata e classificandola come errata anche il suo valore sarà correttamente appreso come valore 'sbagliato' in quanto presente in una fake KP
+                pred_str_kps += w + ' '
+            pred_str_kps += '<eos>'
+        pred_str_list.append(bert_tokenizer.tokenize(pred_str_kps))
+        # pred_idx_list.append(bert_tokenizer.convert_tokens_to_ids(b_trg_str))  # rivedere bene
+    print(pred_str_list)
+    print('fin qui')
 
     target_str_2dlist = convert_list_to_kphs(trg)
     # torch.save(target_str_2dlist, 'prova/target_str_2dlist.pt')  # gl saving tensors
@@ -200,6 +227,7 @@ def main(opt):
     n_layers = opt.D_layers  # gl: modificare con i dati BERT
     bert_model = NLP_MODELS[opt.bert_model].choose()  # gl
     D_model = NetModel.from_pretrained(bert_model.pretrained_weights, num_labels=opt.bert_labels)  # gl
+    bert_tokenizer = bert_model.tokenizer
     if torch.cuda.is_available():
         # D_model = Discriminator(opt.vocab_size, embedding_dim, hidden_dim, n_layers, opt.word2idx[pykp.io.PAD_WORD], opt.gpuid)
         D_model = D_model.cuda()  # gl
@@ -243,6 +271,7 @@ def main(opt):
         print("Starting with epoch:", epoch)
         for batch_i, batch in enumerate(train_data_loader):
             # print('batch: ' + str(batch_i))  # gl: debug
+            # torch.save(batch, 'prova/batch.pt')  # gl
             best_valid_loss = 1000
             D_model.train()
             D_optimizer.zero_grad()
@@ -254,7 +283,7 @@ def main(opt):
             elif perturb_decay_mode == 2:  # steps decay
                 perturb_std = init_perturb_std * math.pow(perturb_decay_factor, math.floor((1+total_batch)/4000))
             # torch.save(batch, 'prova/batch.pt')  # gl saving tensors
-            avg_batch_loss, _, _ = train_one_batch(D_model, batch, generator, opt, perturb_std)
+            avg_batch_loss, _, _ = train_one_batch(D_model, batch, generator, opt, perturb_std, bert_tokenizer)
             torch.nn.utils.clip_grad_norm_(D_model.parameters(), clip)
             avg_batch_loss.backward()
             

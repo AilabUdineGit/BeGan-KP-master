@@ -89,9 +89,9 @@ class Discriminator(S_RNN):
         total_kphs = len(kph)
         src = self.transform_src(src, total_kphs)
         kph = self.padded_all(kph, total_kphs, self.pad_idx)
+        src, kph = src.long(), kph.long()
         # torch.save(src, 'prova/src.pt')  # gl saving tensors
         # torch.save(kph, 'prova/kph.pt')  # gl saving tensors
-        src, kph = src.long(), kph.long()
         h_abstract, h_kph = self.forward(src, kph)
         h_abstract, h_kph = h_abstract.unsqueeze(0), h_kph.unsqueeze(0)
         return h_abstract, h_kph
@@ -150,20 +150,23 @@ class Discriminator(S_RNN):
         total_rewards = total_rewards.squeeze(0)
         return total_rewards
 
+    # gl: calcola 2 volte e_j in modi diversi: output viene calcolato e poi lasciato da parte; in pratica non viene calcolato il contesto
     def calculate_context(self, abstract_t, kph_t, target_type, len_list):  # # for  maximizing f1 score
         x = self.attention(abstract_t)
         temp = kph_t.permute(0, 2, 1)
         x = torch.bmm(x, temp)
         x = x.permute(0, 2, 1)
         x = torch.bmm(x, abstract_t)
-        output = torch.cat((x, kph_t), dim=2)
+        output = torch.cat((x, kph_t), dim=2)  # gl: concatenazione e_j = [c_j; k_j]
         output = self.Compress(output)
         output = output.squeeze(2)
-        abstract_t = torch.mean(abstract_t, dim=1)
+        abstract_t = torch.mean(abstract_t, dim=1)  # gl: media sui tokens del singolo src: da 385 a 1
         abstract_t = abstract_t.unsqueeze(1)
-        concat_output = torch.cat((abstract_t, kph_t), dim=1)
+        concat_output = torch.cat((abstract_t, kph_t), dim=1)  # gl: no, la concat è qui, tutto quello che c'è prima è dimenticato.
+        # torch.save(concat_output, 'prova/concat_output.pt')  # gl saving tensors
         concat_output = concat_output.permute(1, 0, 2)
         x, hidden = self.MegaRNN(concat_output)
+        # torch.save(x, 'prova/x.pt')  # gl saving tensors
         x = x[-1, :, :]
         output = self.Linear(x)
         output = output.squeeze(1)

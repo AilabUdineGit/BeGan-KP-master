@@ -57,7 +57,8 @@ from torch.nn import functional as F
 def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std):
     # torch.save(one2many_batch, 'prova/one2many_batch.pt')  # gl saving tensors
     # gl: one2many è una lista di 16 tensori o liste, ciascuno con 32 elementi (i tensori con una dimensione pari a 32)
-    src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, _, title, title_oov, title_lens, title_mask = one2many_batch
+    src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, \
+        _, title, title_oov, title_lens, title_mask, _, _, _, _, _ = one2many_batch
     one2many = opt.one2many
     one2many_mode = opt.one2many_mode
     if one2many and one2many_mode > 1:
@@ -92,6 +93,8 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std):
         src, src_lens, src_oov, src_mask, oov_lists, opt.max_length, greedy=False, one2many=one2many,
         one2many_mode=one2many_mode, num_predictions=num_predictions, perturb_std=perturb_std,
         entropy_regularize=entropy_regularize, title=title, title_lens=title_lens, title_mask=title_mask)
+
+    # torch.save(sample_list, 'prova/sample_list.pt')  # gl saving tensors
 
     pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
                                                 delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
@@ -149,6 +152,10 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std):
         kph_f = torch.cat((kph_f, h_kph_f), dim=0)
     _, real_rewards, abstract_loss_real = D_model.calculate_context(abstract_t, kph_t, 1, len_list_t)
     _, fake_rewards, abstract_loss_fake = D_model.calculate_context(abstract_f, kph_f, 0, len_list_f)
+    # torch.save(abstract_t, 'prova/abstract_t.pt')  # gl saving tensors
+    # torch.save(abstract_f, 'prova/abstract_f.pt')  # gl saving tensors
+    # torch.save(kph_t, 'prova/kph_t.pt')  # gl saving tensors
+    # torch.save(kph_f, 'prova/kph_f.pt')  # gl saving tensors
     # torch.save(real_rewards, 'prova/real_rewards.pt')  # gl saving tensors
     # torch.save(abstract_loss_real, 'prova/abstract_loss_real.pt')  # gl saving tensors
     # torch.save(fake_rewards, 'prova/fake_rewards.pt')  # gl saving tensors

@@ -53,7 +53,8 @@ def load_data_and_vocab(opt, load_train=True):
             else:
                 valid_one2one = torch.load(opt.data + '/valid.one2one.%s.pt' % opt.data_filename_suffix, 'wb')
             valid_one2one_dataset = KeyphraseDataset(valid_one2one, word2idx=word2idx, idx2word=idx2word,
-                                                     type='one2one', load_train=load_train, remove_src_eos=opt.remove_src_eos, title_guided=opt.title_guided)
+                                                     type='one2one', load_train=load_train,
+                                                     remove_src_eos=opt.remove_src_eos, title_guided=opt.title_guided)
             valid_loader = DataLoader(dataset=valid_one2one_dataset,
                                       collate_fn=valid_one2one_dataset.collate_fn_one2one,
                                       num_workers=opt.batch_workers, batch_size=opt.batch_size, pin_memory=True,
