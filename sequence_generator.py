@@ -449,10 +449,13 @@ class SequenceGenerator(object):
             if all((s['done'] for s in sample_list)):
                 break
 
+            print(t)  # gl
             # if t < max_sample_length - 1:
             #    #unfinished_mask = unfinished_mask_all[-1] * torch.ne(prediction, self.eos_idx)
             #    unfinished_mask = pred_counters < num_predictions
             #    unfinished_mask_all.append(unfinished_mask)
+
+        # torch.save(sample_list, 'prova/sample_list.pt')  # gl saving tensors
 
         for sample in sample_list:
             sample['attention'] = torch.stack(sample['attention'], dim=0)  # [trg_len, src_len]
