@@ -1,6 +1,6 @@
 Note: this is the original readme file edited by the authors. Only changed some parts to make the project working.
 
-A Bert model is used for the Discriminator. To train it, be sure the option -use_bert_discriminator is set to True, then run
+A Bert model is used for the Discriminator. To train it, be sure the option `-use_bert_discriminator` in config.py is set to True, then run
 ```terminal
 python GAN_Training.py  -data data/kp20k_sorted/ -vocab data/kp20k_sorted/ -exp_path exp/%s.%s -exp kp20k -epochs 5 -copy_attention -train_ml -one2many -one2many_mode 1 -batch_size 2 -model [MLE_model_path] -train_discriminator 
 ```
