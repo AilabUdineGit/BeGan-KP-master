@@ -2,7 +2,8 @@ import torch
 import torch.autograd as autograd
 import torch.nn as nn
 import numpy as np
-from transformers import AdamW, BertPreTrainedModel, BertModel, BertTokenizer, BertForTokenClassification, \
+from transformers import AdamW, \
+    BertPreTrainedModel, BertModel, BertTokenizer, BertForTokenClassification, BertForMultipleChoice, BertForSequenceClassification, \
     XLNetTokenizer, XLNetModel, RobertaModel, RobertaTokenizer, DistilBertModel, DistilBertTokenizer, \
     AlbertTokenizer, AlbertModel
 # from params import PARAMS
@@ -14,6 +15,7 @@ class NetModel(BertPreTrainedModel):
         super().__init__(config)
         self.num_labels = config.num_labels
         self.embedding_dim = config.hidden_size
+        self.loss_function = nn.BCEWithLogitsLoss()  # gl
 
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
@@ -58,6 +60,9 @@ class NetModel(BertPreTrainedModel):
 
         return outputs  # (loss), scores, (hidden_states), (attentions)
 
+    def evaluated_loss(self, results, labels):
+        return self.loss_function(input=results, target=labels)
+
 
 class NLPModel:
 
@@ -68,15 +73,20 @@ class NLPModel:
         self.pretrained_weights = pretrained_weights
 
     def choose(self, model_config=None):
-        self.tokenizer = self.tokenizer.from_pretrained(self.pretrained_weights)
+        self.tokenizer = self.tokenizer.from_pretrained(self.pretrained_weights)  # gl: , add_special_tokens=True
         self.model = self.model.from_pretrained(self.pretrained_weights, config=model_config)
-        num_added_toks = self.tokenizer.add_tokens(['<digit>'])  # gl: aggiunto il token <digit> che ora viene considerato come una parola.
+        # _ = self.tokenizer.add_tokens(['<digit>'])  # gl: aggiunto il token <digit> che ora viene considerato come una parola.
+        # nota: il token <digit> manda in errore la forward() perché andrebbe gestito  a livello di fine-tuning;
+        # quindi: lasciare che <digit> venga tokenizzato in maniera generica, sarà comunque considerato una parola specifica.
         self.model.resize_token_embeddings(len(self.tokenizer))
-        self.add_specific_tokens()
+        # _ = self.add_specific_tokens()
+        # nota: anche lo special token [EOS] se introdotto andrebbe poi gestito; tralasciare e concatenare semplicemente le KP con un punto
+        # capire bene in seguito la questione
         return self
 
     def add_specific_tokens(self):
         # special_tokens_dict = {'eos_token': '[EOS]', 'unk_token': '[UNK]'}
+        # special_tokens_dict = {'eos_token': '[EOS]'}
         special_tokens_dict = {'eos_token': '<eos>'}
         num_added_tok = self.tokenizer.add_special_tokens(special_tokens_dict)
         self.model.resize_token_embeddings(len(self.tokenizer))
@@ -84,7 +94,7 @@ class NLPModel:
 
 
 NLP_MODELS = {  # models from transformers library
-    'BERT': NLPModel('BERT', BertTokenizer, BertModel, "bert-base-uncased"),  # bert-large-uncased
+    'BERT': NLPModel('BERT', BertTokenizer, BertForSequenceClassification, "bert-base-uncased"),  # bert-large-uncased
     'XLNet': NLPModel('XLNet', XLNetTokenizer, XLNetModel, "xlnet-large-uncased"),  # bert-base-cased
     'RoBERTa': NLPModel('Roberta', RobertaTokenizer, RobertaModel, "roberta-base"),
     'DistilBERT': NLPModel('DistilBERT', DistilBertTokenizer, DistilBertModel, 'distilbert-base-uncased'),

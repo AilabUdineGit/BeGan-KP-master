@@ -6,6 +6,12 @@ Created on Fri Aug 23 22:41:50 2019
 @author: r17935avinash
 """
 
+# #############################################
+# #  gl: uncomment for better cuda debug
+# import os
+# os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+# #############################################
+
 import argparse
 import config
 from Disc_train import main as D_train

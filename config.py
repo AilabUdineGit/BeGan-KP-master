@@ -93,7 +93,7 @@ def model_opts(parser):
     #                         "embeddings) to the decoder.")
 
     parser.add_argument('-bidirectional', default=True,
-                        action = "store_true",
+                        action="store_true",
                         help="whether the encoder is bidirectional")
 
     parser.add_argument('-bridge', type=str, default='copy',
@@ -102,9 +102,9 @@ def model_opts(parser):
 
     # Attention options
     parser.add_argument('-attn_mode', type=str, default='concat',
-                       choices=['general', 'concat'],
-                       help="""The attention type to use:
-                       dot or general (Luong) or concat (Bahdanau)""")
+                        choices=['general', 'concat'],
+                        help="""The attention type to use:
+                        dot or general (Luong) or concat (Bahdanau)""")
     # parser.add_argument('-attention_mode', type=str, default='concat',
     #                    choices=['dot', 'general', 'concat'],
     #                    help="""The attention type to use:
@@ -417,7 +417,7 @@ def train_opts(parser):
 
 def predict_opts(parser):
     parser.add_argument('-model', required=True,
-                       help='Path to model .pt file')
+                        help='Path to model .pt file')
     parser.add_argument('-verbose', action="store_true", help="Whether to log the results of every individual samples")
     parser.add_argument('-attn_debug', action="store_true", help="Whether to print attn for each word")
     # parser.add_argument('-present_kp_only', action="store_true", help="Only consider the keyphrases that present in the source text")
@@ -488,7 +488,7 @@ def predict_opts(parser):
                         help='If type is 0, use <sep> to separate keyphrases. If type is 1, use <eos> to separate keyphrases')
     # parser.add_argument('-num_predictions', type=int, default=1,
     #                    help='Control the number of predictions when one2many_mode=2.')
-    parser.add_argument('-max_eos_per_output_seq', type=int, default=1, # max_eos_per_seq
+    parser.add_argument('-max_eos_per_output_seq', type=int, default=1,  # max_eos_per_seq
                         help='Specify the max number of eos in one output sequences to control the number of keyphrases in one output sequence. Only effective when one2many_mode=3 or one2many_mode=2.')
     parser.add_argument('-sampling', action="store_true",
                         help='Use sampling instead of beam search to generate the predictions.')
@@ -622,7 +622,7 @@ def interactive_predict_opts(parser):
     parser.add_argument('-sampling', action="store_true",
                         help='Use sampling instead of beam search to generate the predictions.')
     parser.add_argument('-replace_unk', action="store_true",
-                            help='Replace the unk token with the token of highest attention score.')
+                        help='Replace the unk token with the token of highest attention score.')
     parser.add_argument('-remove_src_eos', action="store_true",
                         help='Remove the eos token at the end of src text')
     parser.add_argument('-remove_title_eos', action="store_true", default=False,
@@ -635,11 +635,13 @@ def interactive_predict_opts(parser):
 
 
 def bert_opts(parser):  # gl
-    parser.add_argument('-bert_model', action="store_true", default='BERT',
+    parser.add_argument('-bert_model', type=str, default='BERT',
                         help='Model from HuggingFace transformers (BERT, ALBERT, ... )')
-    parser.add_argument('-bert_labels', action="store_true", default=2,
-                        help='labels for discriminator classification (2 almost always)')
-    parser.add_argument('-bert_learning_rate', action="store_true", default=0.00004,
-                        help='learning rate for AdamW optimizer')
+    parser.add_argument('-bert_labels', type=int, default=2,
+                        help='Labels for discriminator classification (2 almost always)')
+    parser.add_argument('-bert_learning_rate', type=float, default=0.00004,
+                        help='Learning rate for AdamW optimizer')
+    parser.add_argument('-bert_max_length', type=int, default=512,
+                        help='Max length of Bert input')
     parser.add_argument('-use_bert_discriminator', action="store_true", default=True,
-                        help='if is to use bert discriminator')
+                        help='If is to use bert discriminator')
