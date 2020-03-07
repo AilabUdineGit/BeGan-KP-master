@@ -160,6 +160,7 @@ class Discriminator(S_RNN):
         output = torch.cat((x, kph_t), dim=2)  # gl: concatenazione e_j = [c_j; k_j]
         output = self.Compress(output)
         output = output.squeeze(2)
+        #  gl: da qui ricomincia una nuova valutazione, tutto quello che c'è prima non viene usato
         abstract_t = torch.mean(abstract_t, dim=1)  # gl: media sui tokens del singolo src: da 385 a 1
         abstract_t = abstract_t.unsqueeze(1)
         concat_output = torch.cat((abstract_t, kph_t), dim=1)  # gl: no, la concat è qui, tutto quello che c'è prima è dimenticato.
@@ -179,11 +180,11 @@ class Discriminator(S_RNN):
             results = torch.zeros(total_len)
             if torch.cuda.is_available():
                 results = results.to(self.devices)
-        criterion = nn.BCEWithLogitsLoss()
+        criterion = nn.BCEWithLogitsLoss()  # gl: loss function
         avg_outputs = torch.mean(self.sigmoid(output))
         outputs = self.sigmoid(output)
         loss = criterion(output, results)
-        return outputs, avg_outputs, loss
+        return outputs, avg_outputs, loss  # gl: _, real_rewards, abstract_loss_real or _, fake_rewards, abstract_loss_fake
 
     def Catter(self, kph, rewards, total_len):
         lengths = [len(kp) + 1 for kp in kph]
@@ -207,6 +208,7 @@ class Discriminator(S_RNN):
         output = torch.cat((x, kph_t), dim=2)
         output = self.Compress(output)
         output = output.squeeze(2)
+        #  gl: quanto calcolato fin qui non viene usato sotto;
         abstract_t = torch.mean(abstract_t, dim=1)
         abstract_t = abstract_t.unsqueeze(1)
         concat_output = torch.cat((abstract_t, kph_t), dim=1)
