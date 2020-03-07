@@ -449,7 +449,7 @@ class SequenceGenerator(object):
             if all((s['done'] for s in sample_list)):
                 break
 
-            print(t)  # gl
+            # print(t)  # gl
             # if t < max_sample_length - 1:
             #    #unfinished_mask = unfinished_mask_all[-1] * torch.ne(prediction, self.eos_idx)
             #    unfinished_mask = pred_counters < num_predictions
