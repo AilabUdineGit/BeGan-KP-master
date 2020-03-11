@@ -80,12 +80,16 @@ def build_kps_idx_list(kps, bert_tokenizer, opt):
             for w in kp:
                 if w == pykp.io.UNK_WORD:
                     w = '[UNK]'  # gl: token inserito nel vocabolario di Bert corrispondente a <digit>
+                elif w == pykp.io.PEOS_WORD:
+                    w = '.'
                 # elif w == pykp.io.DIGIT:
                 #     w = '<digit>'  # gl: token inserito nel vocabolario di Bert corrispondente a <digit>
                 # else:  # gl: tutte le altre parole sono invalide e rendono la KP sbagliata (lasciare i valori
                 #     1 == 1  # lasciando la parola inalterata e classificandola come errata anche il suo valore sarà correttamente appreso come valore 'sbagliato' in quanto presente in una fake KP
                 str_kps += w + ' '
-            str_kps += ';'  # gl: was '<eos>'
+            # str_kps += ';'  # gl: was '<eos>'
+            if str_kps[-2] != '.':  # nota: se w=pykp.io.PEOS_WORD allora ho già messo il punto, non mettere il punto e virgola
+                str_kps += ';'
         str_kps += '[SEP]'
         # print(str_kps)
         bert_str_kps = bert_tokenizer.tokenize(str_kps)
@@ -236,6 +240,14 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         build_training_batch(src_idx_list, pred_idx_list, bert_tokenizer, opt, label=0)
     target_train_batch, target_mask_batch, target_segment_batch, target_label_batch = \
         build_training_batch(src_idx_list, target_idx_list, bert_tokenizer, opt, label=1)
+    # torch.save(pred_train_batch, 'prova/pred_train_batch.pt')  # gl saving tensors
+    # torch.save(pred_mask_batch, 'prova/pred_mask_batch.pt')  # gl saving tensors
+    # torch.save(pred_segment_batch, 'prova/pred_segment_batch.pt')  # gl saving tensors
+    # torch.save(pred_label_batch, 'prova/pred_label_batch.pt')  # gl saving tensors
+    # torch.save(target_train_batch, 'prova/target_train_batch.pt')  # gl saving tensors
+    # torch.save(target_mask_batch, 'prova/target_mask_batch.pt')  # gl saving tensors
+    # torch.save(target_segment_batch, 'prova/target_segment_batch.pt')  # gl saving tensors
+    # torch.save(target_label_batch, 'prova/target_label_batch.pt')  # gl saving tensors
 
     # gl: 4. transform to torch.tensor
     pred_input_ids = torch.tensor(pred_train_batch, dtype=torch.long).to(devices)
@@ -251,12 +263,20 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     # torch.save(pred_input_mask, 'prova/pred_input_mask.pt')  # gl saving tensors
     # torch.save(pred_input_segment, 'prova/pred_input_segment.pt')  # gl saving tensors
     # torch.save(pred_input_labels, 'prova/pred_input_labels.pt')  # gl saving tensors
+    # torch.save(target_input_ids, 'prova/target_input_ids.pt')  # gl saving tensors
+    # torch.save(target_input_mask, 'prova/target_input_mask.pt')  # gl saving tensors
+    # torch.save(target_input_segment, 'prova/target_input_segment.pt')  # gl saving tensors
+    # torch.save(target_input_labels, 'prova/target_input_labels.pt')  # gl saving tensors
 
     # gl: 5. forward pass
     # print('pred_input_ids.shape:     ' + str(pred_input_ids.shape))
     # print('pred_input_mask.shape:    ' + str(pred_input_mask.shape))
     # print('pred_input_segment.shape: ' + str(pred_input_segment.shape))
     # print('pred_input_labels.shape:  ' + str(pred_input_labels.shape))
+    # print('target_input_ids.shape:     ' + str(target_input_ids.shape))
+    # print('target_input_mask.shape:    ' + str(target_input_mask.shape))
+    # print('target_input_segment.shape: ' + str(target_input_segment.shape))
+    # print('target_input_labels.shape:  ' + str(target_input_labels.shape))
     pred_output = D_model(pred_input_ids,
                           attention_mask=pred_input_mask,
                           token_type_ids=pred_input_segment,
@@ -344,7 +364,7 @@ def main(opt):
     # torch.save(valid_data_loader, 'prova/valid_data_loader.pt')  # gl saving tensors
     load_data_time = time_since(start_time)
     logging.info('Time for loading the data: %.1f' % load_data_time)
-    
+
     print("Data Successfully Loaded __.__.__.__.__.__.__.__.__.__.__.__.__.__.")
     model = Seq2SeqModel(opt)
     
@@ -441,7 +461,7 @@ def main(opt):
         total_batch = 0
         print("Starting with epoch:", epoch)
         for batch_i, batch in enumerate(train_data_loader):
-            print('batch: ' + str(batch_i))  # gl: debug
+            # print('batch: ' + str(batch_i))  # gl: debug
             # torch.save(batch, 'prova/batch.pt')  # gl
             best_valid_loss = 1000
             D_model.train()
