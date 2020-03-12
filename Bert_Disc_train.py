@@ -256,8 +256,12 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     target_input_mask = torch.tensor(target_mask_batch, dtype=torch.float).to(devices)  # gl: was dtype=torch.float32
     pred_input_segment = torch.tensor(pred_segment_batch, dtype=torch.long).to(devices)
     target_input_segment = torch.tensor(target_segment_batch, dtype=torch.long).to(devices)
-    pred_input_labels = torch.tensor(pred_label_batch, dtype=torch.long).to(devices)
-    target_input_labels = torch.tensor(target_label_batch, dtype=torch.long).to(devices)
+    if opt.bert_labels == 1:
+        target_input_labels = torch.tensor(target_label_batch, dtype=torch.float).to(devices)
+        pred_input_labels = torch.tensor(pred_label_batch, dtype=torch.float).to(devices)
+    else:
+        target_input_labels = torch.tensor(target_label_batch, dtype=torch.long).to(devices)
+        pred_input_labels = torch.tensor(pred_label_batch, dtype=torch.long).to(devices)
 
     # torch.save(pred_input_ids, 'prova/pred_input_ids.pt')  # gl saving tensors
     # torch.save(pred_input_mask, 'prova/pred_input_mask.pt')  # gl saving tensors
@@ -435,23 +439,6 @@ def main(opt):
         optimizer_grouped_parameters = [{'params': [p for n, p in param_optimizer]}]
     D_optimizer = AdamW(optimizer_grouped_parameters, opt.bert_learning_rate, correct_bias=False)
 
-    # # gl: it works, but input data and shapes are not the same as we need
-    # choices = ["Hello, my dog is cute", "Hello, my cat is amazing", "Hello, my name is Joe"]
-    # input_ids = torch.tensor([bert_tokenizer.encode(s, add_special_tokens=True) for s in choices]).unsqueeze(0).to(opt.device)  # Batch size 1, 2 choices
-    # labels = torch.tensor(2).unsqueeze(0).to(opt.device)  # Batch size 1
-    # outputs = D_model(input_ids, labels=labels)
-    # loss, classification_scores = outputs[:2]
-
-    # # from transformers import BertForSequenceClassification
-    # # p_model = BertForSequenceClassification.from_pretrained('bert-base-uncased')
-    # gl: nota importante: <eos> e <digit> vengono correttamente tokenizzati, ma poi fanno esplodere tutto quando si chiama la forward() (errori cuda)
-    # prova = bert_tokenizer.eos_token
-    # input_ids = torch.tensor(bert_tokenizer.encode("Hello, my dog is cute. [SEP] Its name is [UNK]. Not Dick", add_special_tokens=True)).unsqueeze(0).to(opt.device)  # Batch size 1
-    # # input_ids = torch.tensor(bert_tokenizer.encode("Hello, my dog is cute", add_special_tokens=True)).unsqueeze(0)  # Batch size 1
-    # labels = torch.tensor([1]).unsqueeze(0).to(opt.device)  # Batch size 1
-    # outputs = D_model(input_ids, labels=labels)
-    # loss, classification_scores = outputs[:2]
-
     # D_optimizer = torch.optim.Adam(D_model.parameters(), opt.learning_rate)
 
     print("Beginning with training Discriminator")
@@ -489,7 +476,7 @@ def main(opt):
                 total = 0
                 valid_loss_total, valid_real_total, valid_fake_total = 0, 0, 0
                 for batch_j, valid_batch in enumerate(valid_data_loader):
-                    print(batch_j)
+                    # print(batch_j)
                     # torch.save(valid_batch, 'prova/valid_batch_error.pt')  # gl saving tensors
                     total += 1
                     valid_loss, valid_real, valid_fake = train_one_batch(D_model, valid_batch, generator, opt, perturb_std, bert_tokenizer)
