@@ -185,6 +185,9 @@ def vocab_opts(parser):
     parser.add_argument('-dynamic_dict', default=True,
                         action='store_true', help="Create dynamic dictionaries (for copy)")
 
+    parser.add_argument('-sample_size', type=int, default=1000,
+                        help="Max number of samples to preprocess")
+
 
 def train_opts(parser):
     # Model loading/saving options
@@ -637,8 +640,8 @@ def interactive_predict_opts(parser):
 def bert_opts(parser):  # gl
     parser.add_argument('-bert_model', type=str, default='BERT',
                         help='Model from HuggingFace transformers (BERT, ALBERT, ... )')
-    parser.add_argument('-bert_labels', type=int, default=1,  # gl: was 2
-                        help='Labels for discriminator classification (2 almost always)')
+    parser.add_argument('-bert_labels', type=int, default=1,  # gl: was 2; put 1 for sequence classification (regression)
+                        help='Labels for discriminator classification (2 for Multiple Choice, 1 for Sequence Classification)')
     parser.add_argument('-bert_learning_rate', type=float, default=0.00004,
                         help='Learning rate for AdamW optimizer')
     parser.add_argument('-bert_max_length', type=int, default=512,  # gl: 384 batch_size=3; 512 batch_size=2
