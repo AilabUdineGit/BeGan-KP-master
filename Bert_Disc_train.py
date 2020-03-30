@@ -51,7 +51,7 @@ import random
 from torch import device 
 from hierarchal_attention_Discriminator import Discriminator
 from torch.nn import functional as F
-from BERT_Discriminator import NetModel, NLPModel, NLP_MODELS
+from BERT_Discriminator import NetModel, NetModelMC, NLPModel, NLP_MODELS
 from transformers import AdamW
 # ####################################################################################################
 # def Check_Valid_Loss(valid_data_loader,D_model,batch,generator,opt,perturb_std):
@@ -308,7 +308,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
                 sum_fake += output[1][i][1]
                 if output[1][i][0] > output[1][i][1]:
                     positives += 1
-            else:
+            elif labels[i].item() == 1:
                 sum_real += output[1][i][1]
                 sum_fake += output[1][i][0]
                 if output[1][i][1] > output[1][i][0]:
@@ -317,7 +317,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         avg_real = sum_real / (i + 1)
         avg_fake = sum_fake / (i + 1)
 
-    else:
+    elif bert_model_name == 'BertForSequenceClassification':
 
         # gl: 4. transform to torch.tensor
         pred_input_ids = torch.tensor(pred_train_batch, dtype=torch.long).to(devices)
@@ -364,21 +364,38 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         # torch.save(target_output, 'prova/target_output.pt')  # gl saving tensors
 
         avg_batch_loss = (pred_output[0] + target_output[0])
-        avg_real = torch.mean(target_output[1])
-        avg_fake = torch.mean(pred_output[1])
+
         positives = torch.tensor([0.])
-        for i in range(opt.batch_size):  # gl: evaluating a (custom) accuracy
-            if i > len(pred_train_batch) - 1 or i > len(target_train_batch) - 1:  # gl: batch could be not complete
-                break
-            if target_output[1][i] > 0.5:
-                positives += 0.5
-            if pred_output[1][i] < 0.5:
-                positives += 0.5
+        if opt.bert_labels == 1:
+            avg_real = torch.mean(target_output[1])
+            avg_fake = torch.mean(pred_output[1])
+
+            for i in range(opt.batch_size):  # gl: evaluating a (custom) accuracy
+                if i > len(pred_train_batch) - 1 or i > len(target_train_batch) - 1:  # gl: batch could be not complete
+                    break
+                if target_output[1][i] > 0.5 > pred_output[1][i]:
+                    positives += 1
+        else:
+            avg_real = torch.mean(target_output[1][:][:, 1])  # gl: media degli score della classe 1, ok se alta
+            avg_fake = torch.mean(pred_output[1][:][:, 0])  # gl: media degli score della classe 0, ok se alta
+            for i in range(opt.batch_size):  # batch_size
+                if i > len(pred_train_batch) - 1 or i > len(target_train_batch) - 1:  # gl: batch could be not complete
+                    break
+                if target_output[1][i][1] > target_output[1][i][0] and pred_output[1][i][0] > pred_output[1][i][1]:
+                    positives += 1
+
+                # print('target_output[1][i] : ' + str(target_output[1][i]))
+                # print('pred_output[1][i]   : ' + str(pred_output[1][i]))
+
         # print(avg_batch_loss)  # gl
         # print(avg_real)  # gl
         # print(avg_fake)  # gl
 
     return avg_batch_loss, avg_real, avg_fake, positives
+
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
 def main(opt):
@@ -392,13 +409,13 @@ def main(opt):
 
     print("Data Successfully Loaded __.__.__.__.__.__.__.__.__.__.__.__.__.__.")
     model = Seq2SeqModel(opt)
-    
+
     if torch.cuda.is_available():
         model.load_state_dict(torch.load(opt.model_path))
         model = model.to(opt.gpuid)
     else:
         model.load_state_dict(torch.load(opt.model_path, map_location="cpu"))
-    
+
     print("___________________ Generator Initialised and Loaded _________________________")
     generator = SequenceGenerator(model,
                                   bos_idx=opt.word2idx[pykp.io.BOS_WORD],
@@ -412,28 +429,53 @@ def main(opt):
                                   review_attn=opt.review_attn,
                                   cuda=opt.gpuid > -1
                                   )
-    
+
     init_perturb_std = opt.init_perturb_std
     final_perturb_std = opt.final_perturb_std
     perturb_decay_factor = opt.perturb_decay_factor
     perturb_decay_mode = opt.perturb_decay_mode
-    # hidden_dim = opt.D_hidden_dim  # gl: modificare con i dati BERT
+    hidden_dim = opt.D_hidden_dim  # gl: modificare con i dati BERT
     # embedding_dim = opt.D_embedding_dim  # gl: modificare con i dati BERT
-    # n_layers = opt.D_layers  # gl: modificare con i dati BERT
+    n_layers = opt.D_layers  # gl: modificare con i dati BERT
     bert_model = NLP_MODELS[opt.bert_model].choose()  # gl
     bert_model_name = bert_model.model.__class__.__name__
     print(bert_model_name)
 
-    # D_model = NetModel.from_pretrained(bert_model.pretrained_weights, num_labels=opt.bert_labels, output_hidden_states=True)  # gl
-    D_model = bert_model.model.from_pretrained('bert-base-uncased', output_hidden_states=True, num_labels=opt.bert_labels)  # gl: prova semplificata
+    if bert_model_name == 'BertForSequenceClassification':
+        D_model = NetModel.from_pretrained(bert_model.pretrained_weights,
+                                           num_labels=opt.bert_labels,
+                                           output_hidden_states=True,
+                                           output_attentions=True,
+                                           hidden_dropout_prob=0.1,
+                                           hidden_dim=hidden_dim,
+                                           n_layers=n_layers,
+                                           )
+    elif bert_model_name == 'BertForMultipleChoice':
+        D_model = NetModelMC.from_pretrained(bert_model.pretrained_weights,
+                                             output_hidden_states=True,
+                                             output_attentions=True,
+                                             hidden_dropout_prob=0.1,
+                                             hidden_dim=hidden_dim,
+                                             n_layers=n_layers,
+                                             )
+
+    # D_model = bert_model.model.from_pretrained('bert-base-uncased',  # gl: prova semplificata
+    #                                            num_labels=opt.bert_labels,
+    #                                            output_hidden_states=True,
+    #                                            output_attentions=True,
+    #                                            # hidden_dropout_prob=0.8,
+    #                                            )
 
     bert_tokenizer = bert_model.tokenizer
+    # torch.save(bert_tokenizer.vocab, 'prova/vocab.pt')  # gl saving tensors
+    # torch.save(bert_tokenizer.ids_to_tokens, 'prova/ids_to_tokens.pt')  # gl saving tensors
     if torch.cuda.is_available():
         # D_model = Discriminator(opt.vocab_size, embedding_dim, hidden_dim, n_layers, opt.word2idx[pykp.io.PAD_WORD], opt.gpuid)
         D_model = D_model.cuda()  # gl
     # else:
     #     D_model = Discriminator(opt.vocab_size, embedding_dim, hidden_dim, n_layers, opt.word2idx[pykp.io.PAD_WORD], "cpu")
     print("The Discriminator Description is ", D_model)
+    print("Number of trainable parameters is ", count_parameters(D_model))
     if opt.pretrained_Discriminator:
         if torch.cuda.is_available():
             D_model.load_state_dict(torch.load(opt.Discriminator_model_path))
@@ -464,9 +506,10 @@ def main(opt):
 
     # D_optimizer = torch.optim.Adam(D_model.parameters(), opt.learning_rate)
 
+    print()
     print("Beginning with training Discriminator")
     print("########################################################################################################")
-    total_epochs = 5
+    total_epochs = opt.epochs  # gl: was 5
     for epoch in range(total_epochs):
         total_batch = 0
         print("Starting with epoch:", epoch)
@@ -476,7 +519,7 @@ def main(opt):
             best_valid_loss = 1000
             D_model.train()
             D_optimizer.zero_grad()
-            
+
             if perturb_decay_mode == 0:  # do not decay
                 perturb_std = init_perturb_std
             elif perturb_decay_mode == 1:  # exponential decay
@@ -487,15 +530,14 @@ def main(opt):
             avg_batch_loss, _, _, _ = train_one_batch(D_model, batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name)
             torch.nn.utils.clip_grad_norm_(D_model.parameters(), clip)
             avg_batch_loss.backward()
-            
+
             D_optimizer.step()
             D_model.eval()
 
-            if batch_i % 100 == 0:  # gl
-                print('batch: ' + str(batch_i))
-
             if batch_i % 4000 == 0:
-                print('validation pass ')
+                print()
+                print('**********************************************************************')
+                print('validation:')
                 total = 0
                 valid_loss_total, valid_real_total, valid_fake_total, valid_positives_total = 0, 0, 0, 0
                 for batch_j, valid_batch in enumerate(valid_data_loader):
@@ -503,18 +545,18 @@ def main(opt):
                     # torch.save(valid_batch, 'prova/valid_batch_error.pt')  # gl saving tensors
                     total += 1
                     valid_loss, valid_real, valid_fake, valid_positives = train_one_batch(D_model, valid_batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name)
-                    # print(len(valid_data_loader))
-                    # print(valid_positives.item())
                     valid_loss_total += valid_loss.cpu().detach().numpy()
                     valid_real_total += valid_real.cpu().detach().numpy()
                     valid_fake_total += valid_fake.cpu().detach().numpy()
                     valid_positives_total += valid_positives.cpu().detach().numpy()
+                    # print(valid_positives_total)
+                    # print(valid_positives.item())
                     D_optimizer.zero_grad()
 
                 print("Currently loss is ", valid_loss_total.item() / total)
                 print("Currently real score is ", valid_real_total.item() / total)
                 print("Currently fake score is ", valid_fake_total.item() / total)
-                print("Currently accuracy is ", valid_positives_total.item() / (total * opt.batch_size))
+                print("Currently accuracy is ", valid_positives_total.item() / len(valid_data_loader.dataset))
 
                 if best_valid_loss > valid_loss_total.item() / total:
                     # print(best_valid_loss)
@@ -526,6 +568,13 @@ def main(opt):
                 else:  # gl
                     print("Loss doesn't decrease so go on without saving the file")
 
+                print('**********************************************************************')
+                print()
+
+            if batch_i % 100 == 0:  # gl
+                print('train batch: ' + str(batch_i) + '; loss: ' + str(avg_batch_loss.item()))
+
+    print()
     print("End of the Discriminator training")  # gl
 
 ######################################
