@@ -118,7 +118,6 @@ class NetModel(BertPreTrainedModel):
 
         return outputs  # (loss), scores, (hidden_states), (attentions)
 
-<<<<<<< HEAD
 
     def get_hidden_states (self,
             input_ids,
@@ -151,7 +150,7 @@ class NetModel(BertPreTrainedModel):
             h_abstract = torch.zeros(2,t1,h_abstract_f1.shape[1])
             h_abstract[0, :t1, :] = h_abstract_f1
             h_abstract[1, :t2, :] = h_abstract_f2
-            print(h_abstract.shape)
+            
         else:
             h_abstract = torch.zeros(2, t2, h_abstract_f2.shape[1])
             h_abstract[0, :t1, :] = h_abstract_f1
@@ -165,128 +164,15 @@ class NetModel(BertPreTrainedModel):
             h_kph[0, :t1_ - t1, :] = h_kph_f1
             h_kph[1, :t2_ - t2, :] = h_kph_f2
         return h_abstract,h_kph
-
-
-
-
-    def get_hidden_states (self,
-            input_ids,
-            attention_mask,
-            token_type_ids,
-            labels):
-        position_ids = None
-        head_mask = None
-        inputs_embeds = None
-        h_states_output = self.forward(input_ids,
-            attention_mask,
-            token_type_ids,
-            position_ids,
-            head_mask,
-            inputs_embeds,
-            labels)
-        loss, logits = h_states_output[:2]
-        a = (input_ids[:, :512] == 102).nonzero() #Sa: position for all the sep
-        print("a",a)
-        t1 = a[0, 1].item() #sa: pick the first sep that divid src from kp fro samp 1
-        t1_ = a[1,1].item()
-        t2 = a[2, 1].item()# sa:pick the first sep that divid src from kp fro samp 2
-        t2_= a[3,1].item()
-        h_abstract_f1 = logits[12][0, :t1, :]
-        h_kph_f1 = logits[12][0, t1:t1_, :]
-        h_abstract_f2 = logits[12][1, :t2, :]
-        h_kph_f2 = logits[12][1, t2:t2_, :]
-        if t1 >= t2:
-            h_abstract = torch.zeros(2,t1,h_abstract_f1.shape[1])
-            h_abstract[0, :t1, :] = h_abstract_f1
-            h_abstract[1, :t2, :] = h_abstract_f2
-            print(h_abstract.shape)
-        else:
-            h_abstract = torch.zeros(2, t2, h_abstract_f2.shape[1])
-            h_abstract[0, :t1, :] = h_abstract_f1
-            h_abstract[1, :t2, :] = h_abstract_f2
-            print(h_abstract.shape)
-        if t1_-t1 >= t2_-t2:
-            h_kph = torch.zeros(2, t1_-t1, h_kph_f1.shape[1])
-            h_kph[0, :t1_-t1, :] = h_kph_f1
-            h_kph[1, :t2_-t2, :] = h_kph_f2
-            print(h_kph.shape)
-        else:
-            h_kph = torch.zeros(2, t2_ - t2, h_kph_f2.shape[1])
-            h_kph[0, :t1_ - t1, :] = h_kph_f1
-            h_kph[1, :t2_ - t2, :] = h_kph_f2
-            print(h_kph.shape)
-        return h_abstract,h_kph
-
 
    # def evaluated_loss(self, results, labels):
-   #    return self.loss_function(input=results, target=labels)
-
-=======
-
-    def get_hidden_states (self,
-            input_ids,
-            attention_mask,
-            token_type_ids,
-            labels):
-        position_ids = None
-        head_mask = None
-        inputs_embeds = None
-        h_states_output = self.forward(input_ids,
-            attention_mask,
-            token_type_ids,
-            position_ids,
-            head_mask,
-            inputs_embeds,
-            labels)
-        loss, logits = h_states_output[:2]
-        a = (input_ids[:, :512] == 102).nonzero() #Sa: position for all the sep
-        print("a",a)
-        t1 = a[0, 1].item() #sa: pick the first sep that divid src from kp fro samp 1
-        t1_ = a[1,1].item()
-        t2 = a[2, 1].item()# sa:pick the first sep that divid src from kp fro samp 2
-        t2_= a[3,1].item()
-        h_abstract_f1 = logits[12][0, :t1, :]
-        h_kph_f1 = logits[12][0, t1:t1_, :]
-        h_abstract_f2 = logits[12][1, :t2, :]
-        h_kph_f2 = logits[12][1, t2:t2_, :]
-        print(t1)
-        print(t2)
-        print(t1_)
-        print(t2_)
-        print()
-        print(h_abstract_f1.shape[1])
-        print(h_abstract_f2.shape)
-        print("kph1", h_kph_f1.shape)
-        print("Kph2",h_kph_f2.shape)
-        if t1 >= t2:
-            h_abstract = torch.zeros(2,t1,h_abstract_f1.shape[1])
-            h_abstract[0, :t1, :] = h_abstract_f1
-            h_abstract[1, :t2, :] = h_abstract_f2
-            print(h_abstract.shape)
-        else:
-            h_abstract = torch.zeros(2, t2, h_abstract_f2.shape[1])
-            h_abstract[0, :t1, :] = h_abstract_f1
-            h_abstract[1, :t2, :] = h_abstract_f2
-            print(h_abstract.shape)
-
-        if t1_-t1 >= t2_-t2:
-            h_kph = torch.zeros(2, t1_-t1, h_kph_f1.shape[1])
-            h_kph[0, :t1_-t1, :] = h_kph_f1
-            h_kph[1, :t2_-t2, :] = h_kph_f2
-            print(h_kph.shape)
-        else:
-            h_kph = torch.zeros(2, t2_ - t2, h_kph_f2.shape[1])
-            h_kph[0, :t1_ - t1, :] = h_kph_f1
-            h_kph[1, :t2_ - t2, :] = h_kph_f2
-            print(h_kph.shape)
-
-        return h_abstract,h_kph
-
+   #    return self.loss_function(input=results, target=labels
+   
 
     def evaluated_loss(self, results, labels):
         return self.loss_function(input=results, target=labels)
 
->>>>>>> f19c95e82641eea69886c25c8df0ab21b50001e1
+
     def Catter(self, kph, rewards, total_len):
         lengths = [len(kp) + 1 for kp in kph]
         max_len = max(lengths)
