@@ -150,20 +150,19 @@ def train_one_batch(D_model, one2many_batch, generator, opt, bert_tokenizer, per
         pred_input_labels = torch.tensor(pred_label_batch, dtype=torch.long).to(devices)
         target_input_labels = torch.tensor(target_label_batch, dtype=torch.long).to(devices)
 
-        torch.save(pred_input_ids, 'prova/pred_input_ids.pt')
-        torch.save(pred_input_mask, 'prova/pred_input_mask.pt')
-        torch.save(pred_input_segment, 'prova/pred_input_segment.pt')
-        torch.save(pred_input_labels, 'prova/pred_input_labels.pt')
-        print('pred_input_ids.shape:     ' + str(pred_input_ids.shape))
-        print('pred_input_mask.shape:    ' + str(pred_input_mask.shape))
-        print('pred_input_segment.shape: ' + str(pred_input_segment.shape))
-        print('pred_input_labels.shape:  ' + str(pred_input_labels.shape))
-
-        print('pred_input_ids.shape:     ' + str(pred_input_ids[0,:512]))
-        print((pred_input_ids[1,:512] == 102).nonzero())
-        print('pred_input_mask.shape:    ' + str(pred_input_mask[0,:512]))
-        print('pred_input_segment.shape: ' + str(pred_input_segment[0,:512]))
-        print('pred_input_labels.shape:  ' + str(pred_input_labels.shape))
+#        torch.save(pred_input_ids, 'prova/pred_input_ids.pt')
+ #       torch.save(pred_input_mask, 'prova/pred_input_mask.pt')
+ ##       torch.save(pred_input_labels, 'prova/pred_input_labels.pt')
+ #       print('pred_input_ids.shape:     ' + str(pred_input_ids.shape))
+  #      print('pred_input_mask.shape:    ' + str(pred_input_mask.shape))
+  #      print('pred_input_segment.shape: ' + str(pred_input_segment.shape))
+   #     print('pred_input_labels.shape:  ' + str(pred_input_labels.shape))
+   #
+   #      print('pred_input_ids.shape:     ' + str(pred_input_ids[0,:512]))
+   #      print((pred_input_ids[1,:512] == 102).nonzero())
+   #      print('pred_input_mask.shape:    ' + str(pred_input_mask[0,:512]))
+   #      print('pred_input_segment.shape: ' + str(pred_input_segment[0,:512]))
+   #      print('pred_input_labels.shape:  ' + str(pred_input_labels.shape))
 
         #f_output = D_model(pred_input_ids,
          #                      attention_mask=pred_input_mask,
@@ -202,9 +201,11 @@ def train_one_batch(D_model, one2many_batch, generator, opt, bert_tokenizer, per
         # print('pred_input_ids.shape:     ' + str(pred_input_ids.shape))
 
         h_abstract_f, h_kph_f = D_model.get_hidden_states(pred_input_ids,
-                            attention_mask=pred_input_mask,
-                            token_type_ids=pred_input_segment,
-                            labels=pred_input_labels)
+                                                        attention_mask = pred_input_mask,
+                                                        token_type_ids = pred_input_segment,
+                                                        labels = pred_input_labels)
+
+
         #h_abstract_f=logits[12][:2,:505,:780]
         #h_kph_f = logits[12][:2,506]
         #h_abstract_f, h_kph_f = D_model.get_hidden_states(src_list, pred_str_list)
