@@ -157,7 +157,7 @@ def model_opts(parser):
 
 
 def dis_opts(parser):
-    parser.add_argument('-D_hidden_dim', type=int, default=150,
+    parser.add_argument('-D_hidden_dim', type=int, default=768,
                         help='hidden dim of Discriminators')
     parser.add_argument('-D_layers', type=int, default=2,
                         help='layer of each blstm')
@@ -640,11 +640,11 @@ def interactive_predict_opts(parser):
 def bert_opts(parser):  # gl
     parser.add_argument('-bert_model', type=str, default='BERT',
                         help='Model from HuggingFace transformers (BERT, ALBERT, ... )')
-    parser.add_argument('-bert_labels', type=int, default=1,  # gl: was 2; put 1 for sequence classification (regression)
-                        help='Labels for discriminator classification (2 for Multiple Choice, 1 for Sequence Classification)')
-    parser.add_argument('-bert_learning_rate', type=float, default=0.00004,  # gl: was 0.00004
+    parser.add_argument('-bert_labels', type=int, default=1,
+                        help='Labels for discriminator classification (2 almost always)')
+    parser.add_argument('-bert_learning_rate', type=float, default=0.00004,
                         help='Learning rate for AdamW optimizer')
-    parser.add_argument('-bert_max_length', type=int, default=320,  # gl: 256 batch_size=5?; 320 batch_size=4; 384 batch_size=3; 512 batch_size=2
+    parser.add_argument('-bert_max_length', type=int, default=320,
                         help='Max length of Bert input')
     parser.add_argument('-use_bert_discriminator', action="store_true", default=True,
                         help='If is to use bert discriminator')
