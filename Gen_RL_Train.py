@@ -198,14 +198,14 @@ def train_one_batch(D_model, one2many_batch, generator, opt, bert_tokenizer, per
         # print(h_abstract_f2.shape, type(h_abstract_f2))
         # print(h_kph_f1.shape)
         # print(h_kph_f2.shape)
-        # print('pred_input_ids.shape:     ' + str(pred_input_ids.shape))
-
+        #print('pred_input_ids.shape:     ' + str(pred_input_ids.shape))
+        #print('pred_input_mask.shape:    ' + str(pred_input_mask.shape))
+        #print('pred_input_segment.shape: ' + str(pred_input_segment.shape))
+        #print('pred_input_labels.shape:  ' + str(pred_input_labels.shape))
         h_abstract_f, h_kph_f = D_model.get_hidden_states(pred_input_ids,
                                                         attention_mask = pred_input_mask,
                                                         token_type_ids = pred_input_segment,
                                                         labels = pred_input_labels)
-
-
         #h_abstract_f=logits[12][:2,:505,:780]
         #h_kph_f = logits[12][:2,506]
         #h_abstract_f, h_kph_f = D_model.get_hidden_states(src_list, pred_str_list)
@@ -214,7 +214,6 @@ def train_one_batch(D_model, one2many_batch, generator, opt, bert_tokenizer, per
 
     pred_str_new2dlist = []
     log_selected_token_total_dist = torch.Tensor([]).to(devices)
-    print("src",src.shape)
     for idx, (src_list, pred_str_list, target_str_list) in enumerate(zip(src, pred_str_2dlist, target_str_2dlist)):
     #for idx in range(pred_input_ids.shape[0]):
         batch_mine += 1
@@ -234,8 +233,8 @@ def train_one_batch(D_model, one2many_batch, generator, opt, bert_tokenizer, per
                                                           labels=pred_input_labels)
         p2d = (0, 0, 0, h_kph_f_size - h_kph_f.size(1))
         h_kph_f = F.pad(h_kph_f, p2d)
-        print("abstract_f", abstract_f.shape)
-        print("h_abstract_f",h_abstract_f.shape)
+        #print("abstract_f", abstract_f.shape)
+        #print("h_abstract_f",h_abstract_f.shape)
         abstract_f = h_abstract_f
         kph_f = h_kph_f
         #abstract_f = torch.cat((abstract_f, h_abstract_f), dim=0)
@@ -247,8 +246,6 @@ def train_one_batch(D_model, one2many_batch, generator, opt, bert_tokenizer, per
     # print('pred_str_new2dlist = ', pred_str_new2dlist)  # lista di liste, lista delle KP predette
     opt.multiple_rewards = True  # gl: necessario perché sia single che multiple sono False in opt.
     if opt.multiple_rewards:
-        # print('multiple reward!')  # gl
-        print(abstract_f.shape)
         len_abstract = abstract_f.size(1)
         total_len = log_selected_token_dist.size(1)
         log_selected_token_total_dist = log_selected_token_total_dist.reshape(-1, total_len)
@@ -261,7 +258,6 @@ def train_one_batch(D_model, one2many_batch, generator, opt, bert_tokenizer, per
         return J
 
     elif opt.single_rewards:
-        # print('single reward!')  # gl
         len_abstract = abstract_f.size(1)
         total_len = log_selected_token_dist.size(1)
         log_selected_token_total_dist = log_selected_token_total_dist.reshape(-1, total_len)
@@ -273,8 +269,9 @@ def train_one_batch(D_model, one2many_batch, generator, opt, bert_tokenizer, per
         return J
 
 
+
 def main(opt):
-    print("agsnf efnghrrqthg")
+    #print("agsnf efnghrrqthg")
     clip = 5
     start_time = time.time()
     train_data_loader, valid_data_loader, word2idx, idx2word, vocab = load_data_and_vocab(opt, load_train=True)
@@ -315,9 +312,9 @@ def main(opt):
     # embedding_dim = opt.D_embedding_dim
     # n_layers = opt.D_layers
     #D_model = Discriminator(opt.vocab_size, embedding_dim, hidden_dim, n_layers, opt.word2idx[pykp.io.PAD_WORD],
-    #                       opt.gpuid)  # gl
+    #                       opt.gpuid)
     bert_model = NLP_MODELS[opt.bert_model].choose()  # gl
-    D_model = NetModel.from_pretrained(bert_model.pretrained_weights, num_labels=opt.bert_labels, output_hidden_states=True,hidden_dim = opt.D_hidden_dim, n_layers = opt.D_layers)  # gl
+    D_model = NetModel.from_pretrained(bert_model.pretrained_weights, num_labels=opt.bert_labels, output_hidden_states=True,hidden_dim = opt.D_hidden_dim, n_layers = opt.D_layers, device =opt.gpuid)
     print("The Discriminator Description is ", D_model)
     PG_optimizer = torch.optim.Adagrad(model.parameters(), opt.learning_rate_rl)
     if torch.cuda.is_available():
@@ -346,11 +343,9 @@ def main(opt):
                     -1. * total_batch * perturb_decay_factor)
             elif perturb_decay_mode == 2:  # steps decay
                 perturb_std = init_perturb_std * math.pow(perturb_decay_factor, math.floor((1 + total_batch) / 4000))
-            # print('perturb_std = ', perturb_std)
-
-            # print('batch = ', batch)
+            #print('perturb_std = ', perturb_std)
+            #print('batch = ', len(batch))
             avg_rewards = train_one_batch(D_model, batch, generator, opt, bert_tokenizer,perturb_std)
-            # print('avg_rewards.size(): ' + str(avg_rewards.size()) + '; dtype: ' + str(avg_rewards.dtype))  # gl
             torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
             avg_rewards.backward()
             PG_optimizer.step()
