@@ -51,7 +51,7 @@ import random
 from torch import device 
 from hierarchal_attention_Discriminator import Discriminator
 from torch.nn import functional as F
-from BERT_Discriminator import NetModel, NLPModel, NLP_MODELS
+from BERT_Discriminator import NetModel, NetModelMC, NLPModel, NLP_MODELS
 from transformers import AdamW
 # ####################################################################################################
 # def Check_Valid_Loss(valid_data_loader,D_model,batch,generator,opt,perturb_std):
@@ -80,12 +80,16 @@ def build_kps_idx_list(kps, bert_tokenizer, opt):
             for w in kp:
                 if w == pykp.io.UNK_WORD:
                     w = '[UNK]'  # gl: token inserito nel vocabolario di Bert corrispondente a <digit>
+                elif w == pykp.io.PEOS_WORD:
+                    w = '.'
                 # elif w == pykp.io.DIGIT:
                 #     w = '<digit>'  # gl: token inserito nel vocabolario di Bert corrispondente a <digit>
                 # else:  # gl: tutte le altre parole sono invalide e rendono la KP sbagliata (lasciare i valori
                 #     1 == 1  # lasciando la parola inalterata e classificandola come errata anche il suo valore sarà correttamente appreso come valore 'sbagliato' in quanto presente in una fake KP
                 str_kps += w + ' '
-            str_kps += ';'  # gl: was '<eos>'
+            # str_kps += ';'  # gl: was '<eos>'
+            if str_kps[-2] != '.':  # nota: se w=pykp.io.PEOS_WORD allora ho già messo il punto, non mettere il punto e virgola
+                str_kps += ';'
         str_kps += '[SEP]'
         # print(str_kps)
         bert_str_kps = bert_tokenizer.tokenize(str_kps)
@@ -162,7 +166,7 @@ def build_training_batch(src, kps, bert_tokenizer, opt, label):
     return training_batch, mask_batch, segment_batch, label_batch
 
 
-def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_tokenizer):
+def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name):
     # torch.save(one2many_batch, 'prova/one2many_batch.pt')  # gl saving tensors
     # gl: one2many è una lista di 16 tensori o liste, ciascuno con 32 elementi (i tensori con una dimensione pari a 32)
     src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, \
@@ -236,104 +240,162 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         build_training_batch(src_idx_list, pred_idx_list, bert_tokenizer, opt, label=0)
     target_train_batch, target_mask_batch, target_segment_batch, target_label_batch = \
         build_training_batch(src_idx_list, target_idx_list, bert_tokenizer, opt, label=1)
+    # torch.save(pred_train_batch, 'prova/pred_train_batch.pt')  # gl saving tensors
+    # torch.save(pred_mask_batch, 'prova/pred_mask_batch.pt')  # gl saving tensors
+    # torch.save(pred_segment_batch, 'prova/pred_segment_batch.pt')  # gl saving tensors
+    # torch.save(pred_label_batch, 'prova/pred_label_batch.pt')  # gl saving tensors
+    # torch.save(target_train_batch, 'prova/target_train_batch.pt')  # gl saving tensors
+    # torch.save(target_mask_batch, 'prova/target_mask_batch.pt')  # gl saving tensors
+    # torch.save(target_segment_batch, 'prova/target_segment_batch.pt')  # gl saving tensors
+    # torch.save(target_label_batch, 'prova/target_label_batch.pt')  # gl saving tensors
 
-    # gl: 4. transform to torch.tensor
-    pred_input_ids = torch.tensor(pred_train_batch, dtype=torch.long).to(devices)
-    target_input_ids = torch.tensor(target_train_batch, dtype=torch.long).to(devices)
-    pred_input_mask = torch.tensor(pred_mask_batch, dtype=torch.float).to(devices)  # gl: was dtype=torch.float32
-    target_input_mask = torch.tensor(target_mask_batch, dtype=torch.float).to(devices)  # gl: was dtype=torch.float32
-    pred_input_segment = torch.tensor(pred_segment_batch, dtype=torch.long).to(devices)
-    target_input_segment = torch.tensor(target_segment_batch, dtype=torch.long).to(devices)
-    pred_input_labels = torch.tensor(pred_label_batch, dtype=torch.long).to(devices)
-    target_input_labels = torch.tensor(target_label_batch, dtype=torch.long).to(devices)
+    # print(bert_model_name)
+    if bert_model_name == 'BertForMultipleChoice':
 
-    # torch.save(pred_input_ids, 'prova/pred_input_ids.pt')  # gl saving tensors
-    # torch.save(pred_input_mask, 'prova/pred_input_mask.pt')  # gl saving tensors
-    # torch.save(pred_input_segment, 'prova/pred_input_segment.pt')  # gl saving tensors
-    # torch.save(pred_input_labels, 'prova/pred_input_labels.pt')  # gl saving tensors
+        input_ids = []
+        input_mask = []
+        input_segment = []
+        labels = []
+        for i in range(opt.batch_size):  # batch_size
+            # print(i)
+            if i > len(pred_train_batch) - 1 or i > len(target_train_batch) - 1:  # gl: batch could be not complete
+                break
+            # print(pred_train_batch[i])
+            value = random.random()
+            appo_i = []
+            appo_m = []
+            appo_s = []
+            if value < 0.5:
+                appo_i.append(pred_train_batch[i])
+                appo_i.append(target_train_batch[i])
+                appo_m.append(pred_mask_batch[i])
+                appo_m.append(target_mask_batch[i])
+                appo_s.append(pred_segment_batch[i])
+                appo_s.append(target_segment_batch[i])
+                labels.append(1)
+            else:
+                appo_i.append(target_train_batch[i])
+                appo_i.append(pred_train_batch[i])
+                appo_m.append(target_mask_batch[i])
+                appo_m.append(pred_mask_batch[i])
+                appo_s.append(target_segment_batch[i])
+                appo_s.append(pred_segment_batch[i])
+                labels.append(0)
+            input_ids.append(appo_i)
+            input_mask.append(appo_m)
+            input_segment.append(appo_s)
 
-    # gl: 5. forward pass
-    # print('pred_input_ids.shape:     ' + str(pred_input_ids.shape))
-    # print('pred_input_mask.shape:    ' + str(pred_input_mask.shape))
-    # print('pred_input_segment.shape: ' + str(pred_input_segment.shape))
-    # print('pred_input_labels.shape:  ' + str(pred_input_labels.shape))
-    pred_output = D_model(pred_input_ids,
-                          attention_mask=pred_input_mask,
-                          token_type_ids=pred_input_segment,
-                          labels=pred_input_labels)
-    # torch.save(pred_output, 'prova/pred_output.pt')  # gl saving tensors
+        input_ids = torch.tensor(input_ids, dtype=torch.long).to(devices)
+        labels = torch.tensor(labels, dtype=torch.long).to(devices)
+        input_mask = torch.tensor(input_mask, dtype=torch.long).to(devices)
+        input_segment = torch.tensor(input_segment, dtype=torch.long).to(devices)
 
-    target_output = D_model(target_input_ids,
-                            attention_mask=target_input_mask,
-                            token_type_ids=target_input_segment,
-                            labels=target_input_labels)
-    # torch.save(target_output, 'prova/target_output.pt')  # gl saving tensors
+        output = D_model(input_ids,
+                         attention_mask=input_mask,
+                         token_type_ids=input_segment,
+                         labels=labels)
 
-    avg_batch_loss = (pred_output[0] + target_output[0])
-    avg_real = torch.mean(target_output[1])
-    avg_fake = torch.mean(pred_output[1])
-    # print(avg_batch_loss)  # gl
-    # print(avg_real)  # gl
-    # print(avg_fake)  # gl
+        avg_batch_loss = output[0]
+        # torch.save(output, 'prova/output.pt')  # gl saving tensors
+        sum_real = 0
+        sum_fake = 0
+        positives = torch.tensor([0])
+        for i in range(opt.batch_size):  # batch_size
+            if i > len(pred_train_batch) - 1 or i > len(target_train_batch) - 1:  # gl: batch could be not complete
+                break
+            if labels[i].item() == 0:
+                sum_real += output[1][i][0]
+                sum_fake += output[1][i][1]
+                if output[1][i][0] > output[1][i][1]:
+                    positives += 1
+            elif labels[i].item() == 1:
+                sum_real += output[1][i][1]
+                sum_fake += output[1][i][0]
+                if output[1][i][1] > output[1][i][0]:
+                    positives += 1
 
-    """
-     src = [batch_size,abstract_seq_len]
-     target_str_2dlist = list of list of true keyphrases
-     pred_str_2dlist = list of list of false keyphrases
-    
-    """
-    # total_abstract_loss = 0
-    # batch_mine = 0
-    # abstract_t = torch.Tensor([]).to(devices)
-    # abstract_f = torch.Tensor([]).to(devices)
-    # kph_t = torch.Tensor([]).to(devices)
-    # kph_f = torch.Tensor([]).to(devices)
-    # h_kph_t_size = 0
-    # h_kph_f_size = 0
-    # len_list_t, len_list_f = [], []
-    # for idx, (src_list, pred_str_list, target_str_list) in enumerate(zip(src, pred_str_2dlist, target_str_2dlist)):  # gl: idx è l'indice del batch (0, ..., 31)
-    #     # torch.save(src_list, 'prova/src_list-idx0.pt')  # gl saving tensors
-    #     # torch.save(pred_str_list, 'prova/pred_str_list-idx0.pt')  # gl saving tensors
-    #     # torch.save(target_str_list, 'prova/target_str_list-idx0.pt')  # gl saving tensors
-    #     batch_mine += 1
-    #     if len(target_str_list) == 0 or len(pred_str_list) == 0:
-    #         continue
-    #     h_abstract_t, h_kph_t = D_model.get_hidden_states(src_list, target_str_list)
-    #     h_abstract_f, h_kph_f = D_model.get_hidden_states(src_list, pred_str_list)
-    #     len_list_t.append(h_kph_t.size(1))
-    #     len_list_f.append(h_kph_f.size(1))
-    #     h_kph_t_size = max(h_kph_t_size, h_kph_t.size(1))
-    #     h_kph_f_size = max(h_kph_f_size, h_kph_f.size(1))
-    #
-    # for idx, (src_list, pred_str_list, target_str_list) in enumerate(zip(src, pred_str_2dlist, target_str_2dlist)):  # gl: idx cicla sui batch
-    #     batch_mine += 1
-    #     if len(target_str_list) == 0 or len(pred_str_list) == 0:
-    #         continue
-    #     h_abstract_t, h_kph_t = D_model.get_hidden_states(src_list, target_str_list)
-    #     # torch.save(h_abstract_t, 'prova/h_abstract_t-idx0.pt')  # gl saving tensors
-    #     # torch.save(h_kph_t, 'prova/h_kph_t-idx0.pt')  # gl saving tensors
-    #     h_abstract_f, h_kph_f = D_model.get_hidden_states(src_list, pred_str_list)
-    #     # torch.save(h_abstract_f, 'prova/h_abstract_f-idx0.pt')  # gl saving tensors
-    #     # torch.save(h_kph_f, 'prova/h_kph_f-idx0.pt')  # gl saving tensors
-    #     p1d = (0, 0, 0, h_kph_t_size - h_kph_t.size(1))
-    #     p2d = (0, 0, 0, h_kph_f_size - h_kph_f.size(1))
-    #     h_kph_t = F.pad(h_kph_t, p1d)
-    #     h_kph_f = F.pad(h_kph_f, p2d)
-    #     abstract_t = torch.cat((abstract_t, h_abstract_t), dim=0)  # gl: qui gli hidden states estratti vengono concatenati in modo che alla fine si abbia comunque un tesnore con dim(0) pari a 32 cioè batch size
-    #     abstract_f = torch.cat((abstract_f, h_abstract_f), dim=0)
-    #     kph_t = torch.cat((kph_t, h_kph_t), dim=0)
-    #     kph_f = torch.cat((kph_f, h_kph_f), dim=0)
-    # _, real_rewards, abstract_loss_real = D_model.calculate_context(abstract_t, kph_t, 1, len_list_t)
-    # _, fake_rewards, abstract_loss_fake = D_model.calculate_context(abstract_f, kph_f, 0, len_list_f)
-    # # torch.save(real_rewards, 'prova/real_rewards.pt')  # gl saving tensors
-    # # torch.save(abstract_loss_real, 'prova/abstract_loss_real.pt')  # gl saving tensors
-    # # torch.save(fake_rewards, 'prova/fake_rewards.pt')  # gl saving tensors
-    # # torch.save(abstract_loss_fake, 'prova/abstract_loss_fake.pt')  # gl saving tensors
-    # avg_batch_loss = (abstract_loss_real + abstract_loss_fake)
-    # avg_real = real_rewards
-    # avg_fake = fake_rewards
+        avg_real = sum_real / (i + 1)
+        avg_fake = sum_fake / (i + 1)
 
-    return avg_batch_loss, avg_real, avg_fake
+    elif bert_model_name == 'BertForSequenceClassification':
+
+        # gl: 4. transform to torch.tensor
+        pred_input_ids = torch.tensor(pred_train_batch, dtype=torch.long).to(devices)
+        target_input_ids = torch.tensor(target_train_batch, dtype=torch.long).to(devices)
+        pred_input_mask = torch.tensor(pred_mask_batch, dtype=torch.float).to(devices)  # gl: was dtype=torch.float32
+        target_input_mask = torch.tensor(target_mask_batch, dtype=torch.float).to(devices)  # gl: was dtype=torch.float32
+        pred_input_segment = torch.tensor(pred_segment_batch, dtype=torch.long).to(devices)
+        target_input_segment = torch.tensor(target_segment_batch, dtype=torch.long).to(devices)
+        if opt.bert_labels == 1:
+            target_input_labels = torch.tensor(target_label_batch, dtype=torch.float).to(devices)
+            pred_input_labels = torch.tensor(pred_label_batch, dtype=torch.float).to(devices)
+        else:
+            target_input_labels = torch.tensor(target_label_batch, dtype=torch.long).to(devices)
+            pred_input_labels = torch.tensor(pred_label_batch, dtype=torch.long).to(devices)
+
+        # torch.save(pred_input_ids, 'prova/pred_input_ids.pt')  # gl saving tensors
+        # torch.save(pred_input_mask, 'prova/pred_input_mask.pt')  # gl saving tensors
+        # torch.save(pred_input_segment, 'prova/pred_input_segment.pt')  # gl saving tensors
+        # torch.save(pred_input_labels, 'prova/pred_input_labels.pt')  # gl saving tensors
+        # torch.save(target_input_ids, 'prova/target_input_ids.pt')  # gl saving tensors
+        # torch.save(target_input_mask, 'prova/target_input_mask.pt')  # gl saving tensors
+        # torch.save(target_input_segment, 'prova/target_input_segment.pt')  # gl saving tensors
+        # torch.save(target_input_labels, 'prova/target_input_labels.pt')  # gl saving tensors
+
+        # gl: 5. forward pass
+        # print('pred_input_ids.shape:     ' + str(pred_input_ids.shape))
+        # print('pred_input_mask.shape:    ' + str(pred_input_mask.shape))
+        # print('pred_input_segment.shape: ' + str(pred_input_segment.shape))
+        # print('pred_input_labels.shape:  ' + str(pred_input_labels.shape))
+        # print('target_input_ids.shape:     ' + str(target_input_ids.shape))
+        # print('target_input_mask.shape:    ' + str(target_input_mask.shape))
+        # print('target_input_segment.shape: ' + str(target_input_segment.shape))
+        # print('target_input_labels.shape:  ' + str(target_input_labels.shape))
+        pred_output = D_model(pred_input_ids,
+                              attention_mask=pred_input_mask,
+                              token_type_ids=pred_input_segment,
+                              labels=pred_input_labels)
+        # torch.save(pred_output, 'prova/pred_output.pt')  # gl saving tensors
+
+        target_output = D_model(target_input_ids,
+                                attention_mask=target_input_mask,
+                                token_type_ids=target_input_segment,
+                                labels=target_input_labels)
+        # torch.save(target_output, 'prova/target_output.pt')  # gl saving tensors
+
+        avg_batch_loss = (pred_output[0] + target_output[0])
+
+        positives = torch.tensor([0.])
+        if opt.bert_labels == 1:
+            avg_real = torch.mean(target_output[1])
+            avg_fake = torch.mean(pred_output[1])
+
+            for i in range(opt.batch_size):  # gl: evaluating a (custom) accuracy
+                if i > len(pred_train_batch) - 1 or i > len(target_train_batch) - 1:  # gl: batch could be not complete
+                    break
+                if target_output[1][i] > 0.5 > pred_output[1][i]:
+                    positives += 1
+        else:
+            avg_real = torch.mean(target_output[1][:][:, 1])  # gl: media degli score della classe 1, ok se alta
+            avg_fake = torch.mean(pred_output[1][:][:, 0])  # gl: media degli score della classe 0, ok se alta
+            for i in range(opt.batch_size):  # batch_size
+                if i > len(pred_train_batch) - 1 or i > len(target_train_batch) - 1:  # gl: batch could be not complete
+                    break
+                if target_output[1][i][1] > target_output[1][i][0] and pred_output[1][i][0] > pred_output[1][i][1]:
+                    positives += 1
+
+                # print('target_output[1][i] : ' + str(target_output[1][i]))
+                # print('pred_output[1][i]   : ' + str(pred_output[1][i]))
+
+        # print(avg_batch_loss)  # gl
+        # print(avg_real)  # gl
+        # print(avg_fake)  # gl
+
+    return avg_batch_loss, avg_real, avg_fake, positives
+
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
 def main(opt):
@@ -344,16 +406,16 @@ def main(opt):
     # torch.save(valid_data_loader, 'prova/valid_data_loader.pt')  # gl saving tensors
     load_data_time = time_since(start_time)
     logging.info('Time for loading the data: %.1f' % load_data_time)
-    
+
     print("Data Successfully Loaded __.__.__.__.__.__.__.__.__.__.__.__.__.__.")
     model = Seq2SeqModel(opt)
-    
+
     if torch.cuda.is_available():
         model.load_state_dict(torch.load(opt.model_path))
         model = model.to(opt.gpuid)
     else:
         model.load_state_dict(torch.load(opt.model_path, map_location="cpu"))
-    
+
     print("___________________ Generator Initialised and Loaded _________________________")
     generator = SequenceGenerator(model,
                                   bos_idx=opt.word2idx[pykp.io.BOS_WORD],
@@ -367,26 +429,53 @@ def main(opt):
                                   review_attn=opt.review_attn,
                                   cuda=opt.gpuid > -1
                                   )
-    
+
     init_perturb_std = opt.init_perturb_std
     final_perturb_std = opt.final_perturb_std
     perturb_decay_factor = opt.perturb_decay_factor
     perturb_decay_mode = opt.perturb_decay_mode
-    # hidden_dim = opt.D_hidden_dim  # gl: modificare con i dati BERT
+    hidden_dim = opt.D_hidden_dim  # gl: modificare con i dati BERT
     # embedding_dim = opt.D_embedding_dim  # gl: modificare con i dati BERT
-    # n_layers = opt.D_layers  # gl: modificare con i dati BERT
+    n_layers = opt.D_layers  # gl: modificare con i dati BERT
     bert_model = NLP_MODELS[opt.bert_model].choose()  # gl
+    bert_model_name = bert_model.model.__class__.__name__
+    print(bert_model_name)
 
-    # D_model = NetModel.from_pretrained(bert_model.pretrained_weights, num_labels=opt.bert_labels)  # gl
-    D_model = bert_model.model.from_pretrained('bert-base-uncased', output_hidden_states=True, num_labels=opt.bert_labels)  # gl: prova semplificata
+    if bert_model_name == 'BertForSequenceClassification':
+        D_model = NetModel.from_pretrained(bert_model.pretrained_weights,
+                                           num_labels=opt.bert_labels,
+                                           output_hidden_states=True,
+                                           output_attentions=True,
+                                           hidden_dropout_prob=0.1,
+                                           hidden_dim=hidden_dim,
+                                           n_layers=n_layers,
+                                           )
+    elif bert_model_name == 'BertForMultipleChoice':
+        D_model = NetModelMC.from_pretrained(bert_model.pretrained_weights,
+                                             output_hidden_states=True,
+                                             output_attentions=True,
+                                             hidden_dropout_prob=0.1,
+                                             hidden_dim=hidden_dim,
+                                             n_layers=n_layers,
+                                             )
+
+    # D_model = bert_model.model.from_pretrained('bert-base-uncased',  # gl: prova semplificata
+    #                                            num_labels=opt.bert_labels,
+    #                                            output_hidden_states=True,
+    #                                            output_attentions=True,
+    #                                            # hidden_dropout_prob=0.8,
+    #                                            )
 
     bert_tokenizer = bert_model.tokenizer
+    # torch.save(bert_tokenizer.vocab, 'prova/vocab.pt')  # gl saving tensors
+    # torch.save(bert_tokenizer.ids_to_tokens, 'prova/ids_to_tokens.pt')  # gl saving tensors
     if torch.cuda.is_available():
         # D_model = Discriminator(opt.vocab_size, embedding_dim, hidden_dim, n_layers, opt.word2idx[pykp.io.PAD_WORD], opt.gpuid)
         D_model = D_model.cuda()  # gl
     # else:
     #     D_model = Discriminator(opt.vocab_size, embedding_dim, hidden_dim, n_layers, opt.word2idx[pykp.io.PAD_WORD], "cpu")
     print("The Discriminator Description is ", D_model)
+    print("Number of trainable parameters is ", count_parameters(D_model))
     if opt.pretrained_Discriminator:
         if torch.cuda.is_available():
             D_model.load_state_dict(torch.load(opt.Discriminator_model_path))
@@ -415,38 +504,22 @@ def main(opt):
         optimizer_grouped_parameters = [{'params': [p for n, p in param_optimizer]}]
     D_optimizer = AdamW(optimizer_grouped_parameters, opt.bert_learning_rate, correct_bias=False)
 
-    # # gl: it works, but input data and shapes are not the same as we need
-    # choices = ["Hello, my dog is cute", "Hello, my cat is amazing", "Hello, my name is Joe"]
-    # input_ids = torch.tensor([bert_tokenizer.encode(s, add_special_tokens=True) for s in choices]).unsqueeze(0).to(opt.device)  # Batch size 1, 2 choices
-    # labels = torch.tensor(2).unsqueeze(0).to(opt.device)  # Batch size 1
-    # outputs = D_model(input_ids, labels=labels)
-    # loss, classification_scores = outputs[:2]
-
-    # # from transformers import BertForSequenceClassification
-    # # p_model = BertForSequenceClassification.from_pretrained('bert-base-uncased')
-    # gl: nota importante: <eos> e <digit> vengono correttamente tokenizzati, ma poi fanno esplodere tutto quando si chiama la forward() (errori cuda)
-    # prova = bert_tokenizer.eos_token
-    # input_ids = torch.tensor(bert_tokenizer.encode("Hello, my dog is cute. [SEP] Its name is [UNK]. Not Dick", add_special_tokens=True)).unsqueeze(0).to(opt.device)  # Batch size 1
-    # # input_ids = torch.tensor(bert_tokenizer.encode("Hello, my dog is cute", add_special_tokens=True)).unsqueeze(0)  # Batch size 1
-    # labels = torch.tensor([1]).unsqueeze(0).to(opt.device)  # Batch size 1
-    # outputs = D_model(input_ids, labels=labels)
-    # loss, classification_scores = outputs[:2]
-
     # D_optimizer = torch.optim.Adam(D_model.parameters(), opt.learning_rate)
 
+    print()
     print("Beginning with training Discriminator")
     print("########################################################################################################")
-    total_epochs = 5
+    total_epochs = opt.epochs  # gl: was 5
     for epoch in range(total_epochs):
         total_batch = 0
         print("Starting with epoch:", epoch)
         for batch_i, batch in enumerate(train_data_loader):
-            print('batch: ' + str(batch_i))  # gl: debug
+            # print('batch: ' + str(batch_i))  # gl: debug
             # torch.save(batch, 'prova/batch.pt')  # gl
             best_valid_loss = 1000
             D_model.train()
             D_optimizer.zero_grad()
-            
+
             if perturb_decay_mode == 0:  # do not decay
                 perturb_std = init_perturb_std
             elif perturb_decay_mode == 1:  # exponential decay
@@ -454,38 +527,54 @@ def main(opt):
             elif perturb_decay_mode == 2:  # steps decay
                 perturb_std = init_perturb_std * math.pow(perturb_decay_factor, math.floor((1+total_batch)/4000))
             # torch.save(batch, 'prova/batch.pt')  # gl saving tensors
-            avg_batch_loss, _, _ = train_one_batch(D_model, batch, generator, opt, perturb_std, bert_tokenizer)
+            avg_batch_loss, _, _, _ = train_one_batch(D_model, batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name)
             torch.nn.utils.clip_grad_norm_(D_model.parameters(), clip)
             avg_batch_loss.backward()
-            
+
             D_optimizer.step()
             D_model.eval()
 
-            if batch_i % 100 == 0:  # gl
-                print('batch: ' + str(batch_i))
-
             if batch_i % 4000 == 0:
-                print('validation pass ')
+                print()
+                print('**********************************************************************')
+                print('validation:')
                 total = 0
-                valid_loss_total, valid_real_total, valid_fake_total = 0, 0, 0
+                valid_loss_total, valid_real_total, valid_fake_total, valid_positives_total = 0, 0, 0, 0
                 for batch_j, valid_batch in enumerate(valid_data_loader):
-                    print(batch_j)
+                    # print(batch_j)
                     # torch.save(valid_batch, 'prova/valid_batch_error.pt')  # gl saving tensors
                     total += 1
-                    valid_loss, valid_real, valid_fake = train_one_batch(D_model, valid_batch, generator, opt, perturb_std, bert_tokenizer)
+                    valid_loss, valid_real, valid_fake, valid_positives = train_one_batch(D_model, valid_batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name)
                     valid_loss_total += valid_loss.cpu().detach().numpy()
                     valid_real_total += valid_real.cpu().detach().numpy()
                     valid_fake_total += valid_fake.cpu().detach().numpy()
+                    valid_positives_total += valid_positives.cpu().detach().numpy()
+                    # print(valid_positives_total)
+                    # print(valid_positives.item())
                     D_optimizer.zero_grad()
 
                 print("Currently loss is ", valid_loss_total.item() / total)
-                print("Currently real loss is ", valid_real_total.item() / total)
-                print("Currently fake loss is ", valid_fake_total.item() / total)
-                
+                print("Currently real score is ", valid_real_total.item() / total)
+                print("Currently fake score is ", valid_fake_total.item() / total)
+                print("Currently accuracy is ", valid_positives_total.item() / len(valid_data_loader.dataset))
+
                 if best_valid_loss > valid_loss_total.item() / total:
+                    # print(best_valid_loss)
                     print("Loss Decreases so saving the file ...............----------->>>>>")
                     state_dfs = D_model.state_dict()
                     torch.save(state_dfs, "Discriminator_checkpts/Bert_Discriminator_" + str(epoch) + ".pth.tar")
                     best_valid_loss = valid_loss_total.item() / total
+                    # print(best_valid_loss)
+                else:  # gl
+                    print("Loss doesn't decrease so go on without saving the file")
+
+                print('**********************************************************************')
+                print()
+
+            if batch_i % 100 == 0:  # gl
+                print('train batch: ' + str(batch_i) + '; loss: ' + str(avg_batch_loss.item()))
+
+    print()
+    print("End of the Discriminator training")  # gl
 
 ######################################

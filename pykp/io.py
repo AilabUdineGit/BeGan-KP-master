@@ -687,7 +687,7 @@ def build_dataset(src_trgs_pairs, word2idx, idx2word, opt, mode='one2one', inclu
                 assert len(o2m_example['title']) == len(o2m_example['title_oov'])
 
             return_examples.append(o2m_example)
-        if idx == 1000:  # gl: questo taglia i dataset a 1000 elementi!
+        if idx == opt.sample_size:  # gl: was 1000
             break
 
     print('Find #(oov_target)/#(all) = %d/%d' % (oov_target, len(return_examples)))

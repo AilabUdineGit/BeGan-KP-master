@@ -188,17 +188,17 @@ class Reader:
     '''' list_keyphr = list of document keyphrases
     """
 
-    def calc_expected_values(self, text_vec, list_keyphr, kps):
-        y_inner = np.zeros(np.shape(text_vec))
-
-        f = lambda a, b: [x for x in range(len(a)) if a[x:x + len(b)] == b]
-        found_kps = []
-        for index, kp in enumerate(list_keyphr):
-            arr_indices = f(text_vec, kp)  # returns the indices at which the pattern starts
-            for i in arr_indices:
-                if kps[index] not in found_kps:
-                    found_kps.append(kps[index])
-                y_inner[i] = 1
-                if len(kp) > 1:
-                    y_inner[(i + 1):(i + 1) + len(kp) - 1] = (2 if self.num_labels == 3 else 1)
-        return y_inner, found_kps
+    # def calc_expected_values(self, text_vec, list_keyphr, kps):
+    #     y_inner = np.zeros(np.shape(text_vec))
+    #
+    #     f = lambda a, b: [x for x in range(len(a)) if a[x:x + len(b)] == b]
+    #     found_kps = []
+    #     for index, kp in enumerate(list_keyphr):
+    #         arr_indices = f(text_vec, kp)  # returns the indices at which the pattern starts
+    #         for i in arr_indices:
+    #             if kps[index] not in found_kps:
+    #                 found_kps.append(kps[index])
+    #             y_inner[i] = 1
+    #             if len(kp) > 1:
+    #                 y_inner[(i + 1):(i + 1) + len(kp) - 1] = (2 if self.num_labels == 3 else 1)
+    #     return y_inner, found_kps

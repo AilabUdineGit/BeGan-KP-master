@@ -48,6 +48,15 @@ class NetModel(BertPreTrainedModel):
         self.MegaRNN = nn.GRU(hidden_dim, 2 * hidden_dim, n_layers)
         self.Linear = nn.Linear(2 * hidden_dim, 1)
 
+        # gl: needed for evaluating rewards
+        self.sigmoid = nn.Sigmoid()
+        self.MegaRNN = nn.GRU(hidden_dim, 2 * hidden_dim, n_layers)
+        self.Linear = nn.Linear(2 * hidden_dim, 1)
+
+        # self.sigmoid = nn.Sigmoid()  # gl
+        # self.tanh = nn.Tanh()  # gl
+        # self.pooler = BertPooler(config)  # gl
+
         self.init_weights()
 
     def forward(
@@ -83,6 +92,18 @@ class NetModel(BertPreTrainedModel):
         sequence_output = torch.mean(sequence_output,dim=1)
         sequence_output = self.dropout(sequence_output)
         logits = self.classifier(sequence_output)
+
+        # # gl: same as BertModel
+        # hidden_state = outputs[0]
+        # hidden_state = self.dropout(hidden_state)
+        # hidden_state = self.pooler(hidden_state)  # gl: same as BertModel
+        # logits = self.classifier(hidden_state)
+
+        # # gl: with sigmoid
+        # logits = self.sigmoid(logits)
+
+        # # # gl: with tanh
+        # logits = self.tanh(logits)
 
         outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
 

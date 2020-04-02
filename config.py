@@ -185,6 +185,9 @@ def vocab_opts(parser):
     parser.add_argument('-dynamic_dict', default=True,
                         action='store_true', help="Create dynamic dictionaries (for copy)")
 
+    parser.add_argument('-sample_size', type=int, default=1000,
+                        help="Max number of samples to preprocess")
+
 
 def train_opts(parser):
     # Model loading/saving options
