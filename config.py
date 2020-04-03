@@ -157,7 +157,7 @@ def model_opts(parser):
 
 
 def dis_opts(parser):
-    parser.add_argument('-D_hidden_dim', type=int, default=150,
+    parser.add_argument('-D_hidden_dim', type=int, default=768,  # gl: was 150, now 768 as per Bert dim
                         help='hidden dim of Discriminators')
     parser.add_argument('-D_layers', type=int, default=2,
                         help='layer of each blstm')
@@ -219,9 +219,8 @@ def train_opts(parser):
                         help="Use CUDA on the selected device.")
     # parser.add_argument('-gpuid', default=[0], nargs='+', type=int,
     #                    help="Use CUDA on the listed devices.")
-    parser.add_argument('-seed', type=int, default=9527,
-                        help="""Random seed used for the experiments
-                        reproducibility.""")
+    parser.add_argument('-seed', type=int, default=9527,  # gl: was 9527
+                        help="""Random seed used for the experiments reproducibility. Default 9527; put 0 if not be used.""")
 
     # Init options
     parser.add_argument('-epochs', type=int, default=20,
@@ -459,8 +458,7 @@ def predict_opts(parser):
     # parser.add_argument('-gpuid', default=[0], nargs='+', type=int,
     #                    help="Use CUDA on the listed devices.")
     parser.add_argument('-seed', type=int, default=9527,
-                        help="""Random seed used for the experiments
-                            reproducibility.""")
+                        help="""Random seed used for the experiments reproducibility. Default 9527; put 0 if not be used.""")
     parser.add_argument('-batch_size', type=int, default=8,
                         help='Maximum batch size')
     parser.add_argument('-batch_workers', type=int, default=4,
@@ -589,8 +587,7 @@ def interactive_predict_opts(parser):
     parser.add_argument('-gpuid', default=0, type=int,
                         help="Use CUDA on the selected device.")
     parser.add_argument('-seed', type=int, default=9527,
-                        help="""Random seed used for the experiments
-                            reproducibility.""")
+                        help="""Random seed used for the experiments reproducibility. Default 9527; put 0 if not be used.""")
     parser.add_argument('-batch_size', type=int, default=8,
                         help='Maximum batch size')
     parser.add_argument('-batch_workers', type=int, default=1,
@@ -640,9 +637,9 @@ def interactive_predict_opts(parser):
 def bert_opts(parser):  # gl
     parser.add_argument('-bert_model', type=str, default='BERT',
                         help='Model from HuggingFace transformers (BERT, ALBERT, ... )')
-    parser.add_argument('-bert_labels', type=int, default=1,  # gl: was 2; put 1 for sequence classification (regression)
+    parser.add_argument('-bert_labels', type=int, default=2,  # gl: was 2; put 1 for sequence classification (regression)
                         help='Labels for discriminator classification (2 for Multiple Choice, 1 for Sequence Classification)')
-    parser.add_argument('-bert_learning_rate', type=float, default=0.00004,  # gl: was 0.00004
+    parser.add_argument('-bert_learning_rate', type=float, default=0.00002,  # gl: was 0.00004
                         help='Learning rate for AdamW optimizer')
     parser.add_argument('-bert_max_length', type=int, default=320,  # gl: 256 batch_size=5?; 320 batch_size=4; 384 batch_size=3; 512 batch_size=2
                         help='Max length of Bert input')
