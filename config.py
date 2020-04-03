@@ -221,7 +221,7 @@ def train_opts(parser):
     #                    help="Use CUDA on the listed devices.")
     parser.add_argument('-seed', type=int, default=9527,
                         help="""Random seed used for the experiments
-                        reproducibility.""")
+                        reproducibility. Put 0 if not to be used""")
 
     # Init options
     parser.add_argument('-epochs', type=int, default=20,
@@ -640,11 +640,11 @@ def interactive_predict_opts(parser):
 def bert_opts(parser):  # gl
     parser.add_argument('-bert_model', type=str, default='BERT',
                         help='Model from HuggingFace transformers (BERT, ALBERT, ... )')
-    parser.add_argument('-bert_labels', type=int, default=1,
+    parser.add_argument('-bert_labels', type=int, default=1,  # gl: only for sequence classification, 1 is for regression
                         help='Labels for discriminator classification (2 almost always)')
-    parser.add_argument('-bert_learning_rate', type=float, default=0.00004,
+    parser.add_argument('-bert_learning_rate', type=float, default=0.00002,  # gl: was 0.00004
                         help='Learning rate for AdamW optimizer')
-    parser.add_argument('-bert_max_length', type=int, default=320,
+    parser.add_argument('-bert_max_length', type=int, default=320,  # gl: 256 batch_size=5?; 320 batch_size=4; 384 batch_size=3; 512 batch_size=2
                         help='Max length of Bert input')
     parser.add_argument('-use_bert_discriminator', action="store_true", default=True,
                         help='If is to use bert discriminator')
