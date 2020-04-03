@@ -45,6 +45,7 @@ import random
 from torch import device 
 from hierarchal_attention_Discriminator import Discriminator
 from torch.nn import functional as F
+from BERT_Discriminator import NetModel, NLPModel, NLP_MODELS
 #####################################################################################################
    
 torch.autograd.set_detect_anomaly(True)
@@ -210,9 +211,12 @@ def main(opt):
     # hidden_dim = opt.D_hidden_dim
     # embedding_dim = opt.D_embedding_dim
     # n_layers = opt.D_layers
-    D_model = Discriminator(opt.vocab_size, embedding_dim, hidden_dim, n_layers, opt.word2idx[pykp.io.PAD_WORD], opt.gpuid)  # gl
+    # D_model = Discriminator(opt.vocab_size, embedding_dim, hidden_dim, n_layers, opt.word2idx[pykp.io.PAD_WORD], opt.gpuid)  # gl
+    bert_model = NLP_MODELS[opt.bert_model].choose()  # gl
+    D_model = NetModel.from_pretrained(bert_model.pretrained_weights, num_labels=opt.bert_labels, output_hidden_states=True)  # gl
+
     print("The Discriminator Description is ", D_model)
-     
+
     PG_optimizer = torch.optim.Adagrad(model.parameters(), opt.learning_rate_rl)
     if torch.cuda.is_available():
         D_model.load_state_dict(torch.load(opt.Discriminator_model_path))
