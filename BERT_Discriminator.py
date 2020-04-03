@@ -204,7 +204,7 @@ class NLPModel:
 
 
 NLP_MODELS = {  # models from transformers library
-    'BERT': NLPModel('BERT', BertTokenizer, BertForSequenceClassification, "bert-base-uncased"),  # bert-large-uncased  gl: BertForSequenceClassification; BertForMultipleChoice
+    'BERT': NLPModel('BERT', BertTokenizer, BertForMultipleChoice, "bert-base-uncased"),  # bert-large-uncased  gl: BertForSequenceClassification; BertForMultipleChoice
     'XLNet': NLPModel('XLNet', XLNetTokenizer, XLNetModel, "xlnet-large-uncased"),  # bert-base-cased
     'RoBERTa': NLPModel('Roberta', RobertaTokenizer, RobertaModel, "roberta-base"),
     'DistilBERT': NLPModel('DistilBERT', DistilBertTokenizer, DistilBertModel, 'distilbert-base-uncased'),
