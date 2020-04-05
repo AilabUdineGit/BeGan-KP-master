@@ -11,8 +11,8 @@ python3 preprocess.py -data_dir data/kp20k_separated -remove_eos -include_peos
 The attribute `_separated` means that present KPs are separated from the absent or abstract ones. Separation is performed useing the special token `<peos>`
 
 ## Bert model
-Different Bert models from <a href = "https://github.com/huggingface/transformers> Huggingface Transformers </a> have been tested.
-Current used model is <a href = "https://huggingface.co/transformers/model_doc/bert.html#bertforsequenceclassification"> BertForSequenceClassification </a> with some changes in the structure.
+Different Bert models from <a href = https://github.com/huggingface/transformers> Huggingface Transformers </a> have been tested.
+Current used model is <a href = https://huggingface.co/transformers/model_doc/bert.html#bertforsequenceclassification> BertForSequenceClassification </a> with some changes in the structure.
 _figura_
 
 ### Bert input
