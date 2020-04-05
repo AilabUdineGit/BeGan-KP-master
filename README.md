@@ -2,10 +2,10 @@ Note: this is the original readme file edited by the authors. Only changed some 
 
 A Bert model is used for the Discriminator. To train it, be sure the option `-use_bert_discriminator` in config.py is set to True, then run
 ```terminal
-python GAN_Training.py  -data data/kp20k_sorted/ -vocab data/kp20k_sorted/ -exp_path exp/%s.%s -exp kp20k -epochs 5 -copy_attention -train_ml -one2many -one2many_mode 1 -batch_size 2 -model [MLE_model_path] -train_discriminator 
+python GAN_Training.py  -data data/kp20k_separated/ -vocab data/kp20k_separated/ -exp_path exp/%s.%s -exp kp20k -epochs 5 -copy_attention -train_ml -one2many -one2many_mode 1 -batch_size 4 -model [MLE_model_path] -train_discriminator 
 ```
 
-Consider a batch_size of only 2 as Bert models are very heavy.
+Consider a batch_size of only 4 as Bert models are very heavy.
 
 # Keyphrase-GAN
 This repository contains the code for the paper <a href="https://arxiv.org/abs/1909.12229">Keyphrase Generation for Scientific Articles using GANs</a>.We have built a novel adversarial method to improve upon the generation of keyphrases using supervised approaches.Our Implementation is built on the starter code from <a href = "https://github.com/kenchan0226/keyphrase-generation-rl"> keyphrase-generation-rl </a> and <a href = "https://github.com/memray/seq2seq-keyphrase-pytorch"> seq2seq-keyphrase-pytorch </a> . Pls comment any issues in the issues section.
