@@ -39,6 +39,7 @@ A tuple of tensors is returned as output:
 - output[0]: classification or regression loss, float tensor of shape `(1,)`, only returned if _labels_ are provided in input;
 - output[1]: classification or regression scores, float tensor of shape `(batch_size, config.num_labels)`;
 - output[2]: hidden states, tuple of float tensors (one for each layer) of shape `(batch_size, sequence_length, hidden_size)`.
+
 Current values are: `config.num_labels = 1` (regression), `batch_size = 4`, `sequence_length = 320`, `hidden_size = 768`.
 
 
