@@ -6,9 +6,9 @@ Our contribution is the introduction of a Bert Discriminator.
 kp20k dataset is used to train both Generator (G) and Discriminator (D). Dataset is composed by +500k sample documents, each consisting of a scientific abstracts and the related KPs.
 To preprocess the data run 
 ```terminal
-python3 preprocess.py -data_dir data/kp20k_separated -remove_eos -include_peos
+python3 preprocess.py -data_dir data/kp20k_separated -remove_eos -include_peos -sample_size 2000
 ```
-The attribute `_separated` means that present KPs are separated from the absent or abstract ones. Separation is performed useing the special token `<peos>`
+The attribute `_separated` means that present KPs are separated from the absent or abstract ones. Separation is performed useing the special token `<peos>`. Default value for `-sample_size = 1000`.
 
 ## Bert model for Discriminator
 Different Bert models from <a href = https://github.com/huggingface/transformers> Huggingface Transformers </a> have been tested.
