@@ -27,7 +27,7 @@ The final pattern is:
 ```terminal
 [CLS] <abstract> [SEP] <KP1> <KP2> ... <KPn> [SEP]
 ```
-where `[CLS]` is the Bert starting token, `[SEP]` is the Bert separation and ending token, `<abstract>` are the tokens of the abstract and `<KPi>` are those of the _i-th_ KP. For each abstract, two input sequences as above are built: one with the real KPs, and one with the fake ones. Then the model is trained with both real and fake sequences, each with the appropriate label: 0 for fake, 1 for real.
+where `[CLS]` is the special starting token, `[SEP]` is the spacial separation and ending token, `<abstract>` are the tokens of the abstract and `<KPi>` are those of the _i-th_ KP. For each abstract, two input sequences as above are built: one with the real KPs, and one with the fake ones. Then the model is trained with both real and fake sequences, each with the appropriate label: 0 for fake, 1 for real.
 
 ### Training of Discriminator
 Be sure the option `-use_bert_discriminator` in config.py is set to True, then run
