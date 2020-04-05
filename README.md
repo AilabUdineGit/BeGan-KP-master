@@ -6,7 +6,7 @@ Output of Discriminator is used to evaluate rewards for the Reinforcement Learni
 
 ## Dataset and Data Preprocessing
 Kp20k dataset is used to train both Generator (G) and Discriminator (D). Dataset is composed by +500k sample documents, each consisting of a scientific abstracts and the related KPs.
-To preprocess the data run 
+To preprocess the data run: 
 ```terminal
 python3 preprocess.py -data_dir data/kp20k_separated -remove_eos -include_peos -sample_size 2000
 ```
@@ -27,7 +27,7 @@ The final pattern is:
 ```terminal
 [CLS] <abstract> [SEP] <KP1> <KP2> ... <KPn> [SEP]
 ```
-where `<abstract>` are the tokens of the abstract and `<KPi>` are those of the _i-th_ KP. For each abstract, two input sequences as above are built: one with the real KPs, and one with the fake ones. Then the model is trained with both real and fake sequences, each with the appropriate label: 0 for fake, 1 for real.
+where `[CLS]` is the Bert starting token, `[SEP]` is the Bert separation and ending token, `<abstract>` are the tokens of the abstract and `<KPi>` are those of the _i-th_ KP. For each abstract, two input sequences as above are built: one with the real KPs, and one with the fake ones. Then the model is trained with both real and fake sequences, each with the appropriate label: 0 for fake, 1 for real.
 
 ### Training of Discriminator
 Be sure the option `-use_bert_discriminator` in config.py is set to True, then run
