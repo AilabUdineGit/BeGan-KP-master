@@ -12,7 +12,7 @@ The attribute `_separated` means that present KPs are separated from the absent 
 
 ## Bert model for Discriminator
 Different Bert models from <a href = https://github.com/huggingface/transformers> Huggingface Transformers </a> have been tested.
-Current used model is <a href = https://huggingface.co/transformers/model_doc/bert.html#bertforsequenceclassification> BertForSequenceClassification </a>. It can be used to perform both classification passing it an `option.num_labels >= 2`, or regression with `option.num_labels = 1`. Current model in use is a regressor so `option.num_labels = 1`.
+Current used model is <a href = https://huggingface.co/transformers/model_doc/bert.html#bertforsequenceclassification> BertForSequenceClassification </a>. It can be used to perform both classification passing it an `option.num_labels >= 2`, or regression with `option.num_labels = 1`. Current model in use is a regressor so `option.num_labels = 1`; in this case classification is performed splitting the output in two classes: `> 0.5` (real sample) and `< 0.5` (fake sample).
 
 Some changes have been made in the structure, notably the output to classify the sample is not retrieved from the [CLS] token but from an average of _all_ the input tokens (cfr. <a href = https://huggingface.co/transformers/model_doc/bert.html#bertmodel> BertModel </a>: `pooler_output` in the `Returns` section) 
 
