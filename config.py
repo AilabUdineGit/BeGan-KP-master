@@ -633,8 +633,7 @@ def interactive_predict_opts(parser):
     parser.add_argument('-block_ngram_repeat', type=int, default=0,
                         help='Block repeat of n-gram')
     parser.add_argument('-ignore_when_blocking', nargs='+', type=str, default=['<sep>'],
-                        help="""Ignore these strings when blocking repeats.
-                           You want to block sentence delimiters.""")
+                        help="""Ignore these strings when blocking repeats. You want to block sentence delimiters.""")
 
 
 def bert_opts(parser):  # gl
@@ -642,7 +641,7 @@ def bert_opts(parser):  # gl
                         help='Model from HuggingFace transformers (BERT, ALBERT, ... )')
     parser.add_argument('-bert_labels', type=int, default=1,  # gl: only for sequence classification, 1 is for regression
                         help='Labels for discriminator classification (2 almost always)')
-    parser.add_argument('-bert_learning_rate', type=float, default=0.00002,  # gl: was 0.00004
+    parser.add_argument('-bert_learning_rate', type=float, default=0.00001,  # gl: was 0.00004, then 0.00002
                         help='Learning rate for AdamW optimizer')
     parser.add_argument('-bert_max_length', type=int, default=320,  # gl: 256 batch_size=5?; 320 batch_size=4; 384 batch_size=3; 512 batch_size=2
                         help='Max length of Bert input')
