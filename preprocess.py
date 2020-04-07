@@ -4,7 +4,7 @@ import torch
 import pickle
 import pykp.io
 import config
-from BERT_Discriminator import NetModel, NLPModel, NLP_MODELS  # gl
+# from BERT_Discriminator import NetModel, NLPModel, NLP_MODELS  # gl
 
 
 def read_tokenized_src_file(path, remove_eos=True):
@@ -212,15 +212,9 @@ def main(opt):
     # simply concatenate src and target when building vocab
     word2idx, idx2word, token_freq_counter = build_vocab(tokenized_train_pairs, opt.include_peos)  # gl 344733 elementi
 
-    if opt.use_bert_discriminator:
-        bert_model = NLP_MODELS[opt.bert_model].choose()  # gl
-        bert_tokenizer = bert_model.tokenizer  # gl
-    else:
-        bert_tokenizer = None
-
     # building preprocessed training set for one2one training mode # gl: qui sotto avviene il troncamento ai primi 1001 elementi (siccome è one2one, in tot sono 4685
     train_one2one = pykp.io.build_dataset(tokenized_train_pairs, word2idx, idx2word, opt, mode='one2one',
-                                          include_original=True, title_list=tokenized_train_title, bert_tokenizer=bert_tokenizer)
+                                          include_original=True, title_list=tokenized_train_title)
     # a list of dict, with fields src, trg, src_oov, oov_dict, oov_list, etc.
 
     print("Dumping train one2one to disk: %s" % (opt.data_dir + '/train.one2one.pt'))
@@ -230,7 +224,7 @@ def main(opt):
 
     # building preprocessed training set for one2many training mode
     train_one2many = pykp.io.build_dataset(tokenized_train_pairs, word2idx, idx2word, opt, mode='one2many',
-                                           include_original=True, title_list=tokenized_train_title, bert_tokenizer=bert_tokenizer)
+                                           include_original=True, title_list=tokenized_train_title)
     print("Dumping train one2many to disk: %s" % (opt.data_dir + '/train.one2many.pt'))
     torch.save(train_one2many, open(opt.data_dir + '/train.one2many.pt', 'wb'))
     len_train_one2many = len(train_one2many)
@@ -257,9 +251,9 @@ def main(opt):
 
     # building preprocessed validation set for one2one and one2many training mode
     valid_one2one = pykp.io.build_dataset(tokenized_valid_pairs, word2idx, idx2word, opt, mode='one2one',
-                                          include_original=True, title_list=tokenized_valid_title, bert_tokenizer=bert_tokenizer)
+                                          include_original=True, title_list=tokenized_valid_title)
     valid_one2many = pykp.io.build_dataset(tokenized_valid_pairs, word2idx, idx2word, opt, mode='one2many',
-                                           include_original=True, title_list=tokenized_valid_title, bert_tokenizer=bert_tokenizer)
+                                           include_original=True, title_list=tokenized_valid_title)
 
     print("Dumping valid to disk: %s" % (opt.data_dir + '/valid.pt'))
     torch.save(valid_one2one, open(opt.data_dir + '/valid.one2one.pt', 'wb'))
@@ -286,9 +280,9 @@ def main(opt):
 
     # building preprocessed test set for one2one and one2many training mode
     test_one2one = pykp.io.build_dataset(tokenized_test_pairs, word2idx, idx2word, opt, mode='one2one',
-                                         include_original=True, title_list=tokenized_test_title, bert_tokenizer=bert_tokenizer)
+                                         include_original=True, title_list=tokenized_test_title)
     test_one2many = pykp.io.build_dataset(tokenized_test_pairs, word2idx, idx2word, opt, mode='one2many',
-                                          include_original=True, title_list=tokenized_test_title, bert_tokenizer=bert_tokenizer)
+                                          include_original=True, title_list=tokenized_test_title)
 
     print("Dumping test to disk: %s" % (opt.data_dir + '/valid.pt'))
     torch.save(test_one2one, open(opt.data_dir + '/test.one2one.pt', 'wb'))
@@ -335,7 +329,7 @@ if __name__ == "__main__":
     parser.add_argument('-title_guided', action="store_true", help='Allow easy access to the title of the source text.')
 
     config.vocab_opts(parser)
-    config.bert_opts(parser)  # gl
+    # config.bert_opts(parser)  # gl
     # parser.add_argument('-vocab_size', default=50000, type=int, help='Max. number of words in vocab')
     # parser.add_argument('-max_unk_words', default=1000, type=int, help='Max. number of words in OOV vocab')
     opt = parser.parse_args()
