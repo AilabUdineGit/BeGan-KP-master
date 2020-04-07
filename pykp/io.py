@@ -18,8 +18,6 @@ import sys
 import torch
 import torch.utils.data
 
-from utils import bert_utils
-
 PAD_WORD = '<pad>'  # gl: idx=0
 UNK_WORD = '<unk>'  # gl: idx=3
 BOS_WORD = '<bos>'  # gl: idx=1
@@ -34,11 +32,11 @@ class KeyphraseDataset(torch.utils.data.Dataset):
         # keys of matter. `src_oov_map` is for mapping pointed word to dict, `oov_dict` is for determining the dim of predicted logit: dim=vocab_size+max_oov_dict_in_batch
         assert type in ['one2one', 'one2many']
         if type == 'one2one':
-            # keys = ['src', 'trg', 'trg_copy', 'src_oov', 'oov_dict', 'oov_list']
-            keys = ['src', 'trg', 'trg_copy', 'src_oov', 'oov_dict', 'oov_list', 'b_src_str', 'b_trg_str', 'b_tok_map', 'b_src', 'b_trg']
+            keys = ['src', 'trg', 'trg_copy', 'src_oov', 'oov_dict', 'oov_list']
+            # keys = ['src', 'trg', 'trg_copy', 'src_oov', 'oov_dict', 'oov_list', 'b_src_str', 'b_trg_str', 'b_tok_map', 'b_src', 'b_trg']
         elif type == 'one2many':
-            # keys = ['src', 'src_oov', 'oov_dict', 'oov_list', 'src_str', 'trg_str', 'trg', 'trg_copy']
-            keys = ['src', 'src_oov', 'oov_dict', 'oov_list', 'src_str', 'trg_str', 'trg', 'trg_copy', 'b_src_str', 'b_trg_str', 'b_tok_map', 'b_src', 'b_trg']
+            keys = ['src', 'src_oov', 'oov_dict', 'oov_list', 'src_str', 'trg_str', 'trg', 'trg_copy']
+            # keys = ['src', 'src_oov', 'oov_dict', 'oov_list', 'src_str', 'trg_str', 'trg', 'trg_copy', 'b_src_str', 'b_trg_str', 'b_tok_map', 'b_src', 'b_trg']
 
         if title_guided:
             keys += ['title', 'title_oov']
@@ -175,12 +173,12 @@ class KeyphraseDataset(torch.utils.data.Dataset):
 
         batch_size = len(src)
 
-        # gl Bert values
-        b_src = [b['b_src'] for b in batches]
-        b_trg = [b['b_trg'] for b in batches]
-        b_src_str = [b['b_src_str'] for b in batches]
-        b_tok_map = [b['b_tok_map'] for b in batches]
-        b_trg_str = [b['b_trg_str'] for b in batches]
+        # # gl Bert values
+        # b_src = [b['b_src'] for b in batches]
+        # b_trg = [b['b_trg'] for b in batches]
+        # b_src_str = [b['b_src_str'] for b in batches]
+        # b_tok_map = [b['b_tok_map'] for b in batches]
+        # b_trg_str = [b['b_trg_str'] for b in batches]
 
         # trg: a list of concatenated targets, the targets in a concatenated target are separated by a delimiter, oov replaced by UNK
         # trg_oov: a list of concatenated targets, the targets in a concatenated target are separated by a delimiter, oovs are replaced with temporary idx, e.g. 50000, 50001 etc.)
@@ -262,7 +260,7 @@ class KeyphraseDataset(torch.utils.data.Dataset):
             title_oov, _, _ = self._pad(title_oov)
 
         return src, src_lens, src_mask, src_oov, oov_lists, src_str, trg_str, trg, trg_oov, trg_lens, trg_mask, \
-            original_indices, title, title_oov, title_lens, title_mask, b_src, b_trg, b_src_str, b_trg_str, b_tok_map
+            original_indices, title, title_oov, title_lens, title_mask
 
     def collate_fn_one2many_hier(self, batches):
         assert self.type == 'one2many', 'The type of dataset should be one2many.'
@@ -510,7 +508,7 @@ def build_interactive_predict_dataset(tokenized_src, word2idx, idx2word, opt, ti
     return build_dataset(tokenized_src_trg_pairs, word2idx, idx2word, opt, mode='one2many', include_original=True, title_list=title_list)
 
 
-def build_dataset(src_trgs_pairs, word2idx, idx2word, opt, mode='one2one', include_original=False, title_list=None, bert_tokenizer=None):
+def build_dataset(src_trgs_pairs, word2idx, idx2word, opt, mode='one2one', include_original=False, title_list=None):
     """
     Standard process for copy model
     :param title_list: (?) # gl
@@ -520,7 +518,6 @@ def build_dataset(src_trgs_pairs, word2idx, idx2word, opt, mode='one2one', inclu
     :param include_original: keep the original texts of source and target
     :param opt: project options  # gl
     :param word2idx: word to index vocabulary  # gl
-    :param bert_tokenizer: BERT tokenizer
     :return:
     """
     return_examples = []
@@ -607,24 +604,6 @@ def build_dataset(src_trgs_pairs, word2idx, idx2word, opt, mode='one2one', inclu
             if any([w >= opt.vocab_size for w in trg_copy]):
                 oov_target += 1
 
-            if bert_tokenizer is not None:
-                bert_reader = bert_utils.Reader(bert_tokenizer)
-                b_target = target[:]
-                b_target = ' '.join(b_target)
-                # b_trg_str = [bert_tokenizer.tokenize(kp) for kp in target]
-                b_trg_str = bert_tokenizer.tokenize(b_target)
-                b_source = source[:]
-                b_source.insert(0, '[CLS]')
-                b_source.append('[SEP]')
-                b_src_str, b_tokens_map, _ = bert_reader.tokenize_with_map_to_origin(b_source)
-                b_src = bert_tokenizer.convert_tokens_to_ids(b_src_str)
-                b_trg = bert_tokenizer.convert_tokens_to_ids(b_trg_str)
-                example['b_src_str'] = b_src_str
-                example['b_trg_str'] = b_trg_str
-                example['b_tok_map'] = b_tokens_map
-                example['b_src'] = b_src
-                example['b_trg'] = b_trg
-
             if idx % 100 == 0:
                 print("afsdgs;", idx)
                 print('-------------------- %s: %d ---------------------------' % (inspect.getframeinfo(inspect.currentframe()).function, idx))
@@ -650,9 +629,9 @@ def build_dataset(src_trgs_pairs, word2idx, idx2word, opt, mode='one2one', inclu
                 if any([w >= opt.vocab_size for w in trg_copy]):
                     print('Find OOV in target')
 
-                print('b_src_str         \n\t\t[len=%d]: %s' % (len(b_src_str), b_src_str))
-                print('b_trg_str         \n\t\t[len=%d]: %s' % (len(b_trg_str), b_trg_str))
-                print('b_tok_map         \n\t\t[len=%d]: %s' % (len(b_tokens_map), b_tokens_map))
+                # print('b_src_str         \n\t\t[len=%d]: %s' % (len(b_src_str), b_src_str))
+                # print('b_trg_str         \n\t\t[len=%d]: %s' % (len(b_trg_str), b_trg_str))
+                # print('b_tok_map         \n\t\t[len=%d]: %s' % (len(b_tokens_map), b_tokens_map))
 
                 # print('copy_martix      \n\t\t[len=%d]: %s' % (len(example["copy_martix"]), example["copy_martix"]))
                 # print('copy_index  \n\t\t[len=%d]: %s' % (len(example["copy_index"]), example["copy_index"]))

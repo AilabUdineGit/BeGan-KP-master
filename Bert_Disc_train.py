@@ -14,7 +14,7 @@ Created on Mon Jul  1 15:10:45 2019
 
 # ############################### IMPORT LIBRARIES ###############################################################
 import torch
-import numpy as np
+# import numpy as np
 import pykp.io
 import torch.nn as nn
 from utils.statistics import RewardStatistics
@@ -31,16 +31,16 @@ import math
 EPS = 1e-8
 import argparse
 import config
-import logging
-import os
+# import logging
+# import os
 import json
 from pykp.io import KeyphraseDataset
 from pykp.model import Seq2SeqModel
-from torch.optim import Adam
+# from torch.optim import Adam
 import pykp
 from pykp.model import Seq2SeqModel
-import train_ml
-import train_rl
+# import train_ml
+# import train_rl
 
 from utils.time_log import time_since
 from utils.data_loader import load_data_and_vocab
@@ -49,7 +49,7 @@ import time
 import numpy as np
 import random
 from torch import device 
-from hierarchal_attention_Discriminator import Discriminator
+# from hierarchal_attention_Discriminator import Discriminator
 from torch.nn import functional as F
 from BERT_Discriminator import NetModel, NetModelMC, NLPModel, NLP_MODELS
 from transformers import AdamW
@@ -169,8 +169,10 @@ def build_training_batch(src, kps, bert_tokenizer, opt, label):
 def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name):
     # torch.save(one2many_batch, 'prova/one2many_batch.pt')  # gl saving tensors
     # gl: one2many è una lista di 16 tensori o liste, ciascuno con 32 elementi (i tensori con una dimensione pari a 32)
+    # src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, \
+    #     _, title, title_oov, title_lens, title_mask, b_src, b_trg, b_src_str, b_trg_str, b_tok_map = one2many_batch # gl: old version with bert variables
     src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, \
-        _, title, title_oov, title_lens, title_mask, b_src, b_trg, b_src_str, b_trg_str, b_tok_map = one2many_batch
+        _, title, title_oov, title_lens, title_mask = one2many_batch
     one2many = opt.one2many
     one2many_mode = opt.one2many_mode
     if one2many and one2many_mode > 1:
@@ -289,6 +291,10 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         labels = torch.tensor(labels, dtype=torch.long).to(devices)
         input_mask = torch.tensor(input_mask, dtype=torch.long).to(devices)
         input_segment = torch.tensor(input_segment, dtype=torch.long).to(devices)
+        # torch.save(input_ids, 'prova/input_ids.pt')  # gl saving tensors
+        # torch.save(labels, 'prova/labels.pt')  # gl saving tensors
+        # torch.save(input_mask, 'prova/input_mask.pt')  # gl saving tensors
+        # torch.save(input_segment, 'prova/input_segment.pt')  # gl saving tensors
 
         output = D_model(input_ids,
                          attention_mask=input_mask,
@@ -296,23 +302,27 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
                          labels=labels)
 
         avg_batch_loss = output[0]
-        # torch.save(output, 'prova/output.pt')  # gl saving tensors
+        # torch.save(output, 'prova/output_multi.pt')  # gl saving tensors
+        # assert labels.shape[0] == input_ids.shape[0], 'labels have to match input samples'
+        # print(torch.argmax(output[1], dim=1))
+        # print(labels)
+        # print()
+        positives = sum(torch.argmax(output[1], dim=1) == labels)
         sum_real = 0
         sum_fake = 0
-        positives = torch.tensor([0])
         for i in range(opt.batch_size):  # batch_size
             if i > len(pred_train_batch) - 1 or i > len(target_train_batch) - 1:  # gl: batch could be not complete
                 break
             if labels[i].item() == 0:
                 sum_real += output[1][i][0]
                 sum_fake += output[1][i][1]
-                if output[1][i][0] > output[1][i][1]:
-                    positives += 1
+                # if output[1][i][0] > output[1][i][1]:
+                #     positives += 1
             elif labels[i].item() == 1:
                 sum_real += output[1][i][1]
                 sum_fake += output[1][i][0]
-                if output[1][i][1] > output[1][i][0]:
-                    positives += 1
+                # if output[1][i][1] > output[1][i][0]:
+                #     positives += 1
 
         avg_real = sum_real / (i + 1)
         avg_fake = sum_fake / (i + 1)
@@ -336,7 +346,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         # torch.save(pred_input_ids, 'prova/pred_input_ids.pt')  # gl saving tensors
         # torch.save(pred_input_mask, 'prova/pred_input_mask.pt')  # gl saving tensors
         # torch.save(pred_input_segment, 'prova/pred_input_segment.pt')  # gl saving tensors
-        # torch.save(pred_input_labels, 'prova/pred_input_labels.pt')  # gl saving tensors
+        # torch.save(pred_input_labels, 'prova/pred_input_label.pt')  # gl saving tensors
         # torch.save(target_input_ids, 'prova/target_input_ids.pt')  # gl saving tensors
         # torch.save(target_input_mask, 'prova/target_input_mask.pt')  # gl saving tensors
         # torch.save(target_input_segment, 'prova/target_input_segment.pt')  # gl saving tensors
@@ -355,7 +365,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
                               attention_mask=pred_input_mask,
                               token_type_ids=pred_input_segment,
                               labels=pred_input_labels)
-        # torch.save(pred_output, 'prova/pred_output.pt')  # gl saving tensors
+        torch.save(pred_output, 'prova/pred_output.pt')  # gl saving tensors
 
         target_output = D_model(target_input_ids,
                                 attention_mask=target_input_mask,
@@ -366,7 +376,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         avg_batch_loss = (pred_output[0] + target_output[0])
 
         positives = torch.tensor([0.])
-        if opt.bert_labels == 1:
+        if opt.bert_labels == 1:  # regression
             avg_real = torch.mean(target_output[1])
             avg_fake = torch.mean(pred_output[1])
 
@@ -375,13 +385,19 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
                     break
                 if target_output[1][i] > 0.5 > pred_output[1][i]:
                     positives += 1
-        else:
-            avg_real = torch.mean(target_output[1][:][:, 1])  # gl: media degli score della classe 1, ok se alta
-            avg_fake = torch.mean(pred_output[1][:][:, 0])  # gl: media degli score della classe 0, ok se alta
+        else:  # 2 classes classification
+            # avg_real = torch.mean(target_output[1][:][:, 1])  # gl: media degli score della classe 1, ok se alta
+            # avg_fake = torch.mean(pred_output[1][:][:, 0])  # gl: media degli score della classe 0, ok se alta
+            # print('torch.argmax(target_output[1], dim=1) == ' + str(torch.argmax(target_output[1], dim=1)))
+            # print('torch.argmax(pred_output[1], dim=1)   == ' + str(torch.argmax(pred_output[1], dim=1)))
+            # print()
+            avg_real = sum(torch.argmax(target_output[1], dim=1) == target_input_labels) / target_input_labels.shape[0]
+            avg_fake = sum(torch.argmax(pred_output[1], dim=1) == pred_input_labels) / pred_input_labels.shape[0]
+
             for i in range(opt.batch_size):  # batch_size
                 if i > len(pred_train_batch) - 1 or i > len(target_train_batch) - 1:  # gl: batch could be not complete
                     break
-                if target_output[1][i][1] > target_output[1][i][0] and pred_output[1][i][0] > pred_output[1][i][1]:
+                if (target_output[1][i][1] > target_output[1][i][0]) and (pred_output[1][i][0] > pred_output[1][i][1]):
                     positives += 1
 
                 # print('target_output[1][i] : ' + str(target_output[1][i]))
@@ -445,7 +461,7 @@ def main(opt):
         D_model = NetModel.from_pretrained(bert_model.pretrained_weights,
                                            num_labels=opt.bert_labels,
                                            output_hidden_states=True,
-                                           output_attentions=True,
+                                           output_attentions=False,
                                            hidden_dropout_prob=0.1,
                                            hidden_dim=hidden_dim,
                                            n_layers=n_layers,
@@ -453,7 +469,7 @@ def main(opt):
     elif bert_model_name == 'BertForMultipleChoice':
         D_model = NetModelMC.from_pretrained(bert_model.pretrained_weights,
                                              output_hidden_states=True,
-                                             output_attentions=True,
+                                             output_attentions=False,
                                              hidden_dropout_prob=0.1,
                                              hidden_dim=hidden_dim,
                                              n_layers=n_layers,

@@ -20,7 +20,8 @@ from Gen_RL_Train import main as G_train
 import torch 
 import random
 import numpy as np
-import pykp 
+import pykp
+from torch.backends import cudnn
 
 
 def process_opt(opt):
@@ -28,6 +29,14 @@ def process_opt(opt):
         torch.manual_seed(opt.seed)
         np.random.seed(opt.seed)
         random.seed(opt.seed)
+
+        # torch.cuda.manual_seed(opt.seed)
+        # torch.cuda.manual_seed_all(opt.seed)
+
+        # gl: to gain reproducibility
+        torch.backends.cudnn.enabled = False
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
 
     if torch.cuda.is_available() and not opt.gpuid:
         opt.gpuid = 0
