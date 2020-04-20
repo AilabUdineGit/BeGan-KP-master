@@ -1,0 +1,291 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Jul  1 15:10:45 2019
+@author: r17935avinash
+"""
+
+import math
+
+# ############################### IMPORT LIBRARIES ###############################################################
+import pykp.io
+from pykp.reward import *
+from sequence_generator import SequenceGenerator
+
+EPS = 1e-8
+import logging
+import pykp
+from pykp.model import Seq2SeqModel
+
+from utils.time_log import time_since
+from utils.data_loader import load_data_and_vocab
+from utils.string_helper import convert_list_to_kphs
+import time
+from BERT_Discriminator import NetModel, NetModelMC, NLP_MODELS
+from Bert_Disc_train import build_kps_idx_list, build_src_idx_list, build_training_batch
+from torch.nn import functional as F
+
+#####################################################################################################
+
+torch.autograd.set_detect_anomaly(True)
+
+
+# #  batch_reward_stat, log_selected_token_dist = train_one_batch(batch, generator, optimizer_rl, opt, perturb_std)
+#########################################################
+def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name):
+    src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, _, \
+        title, title_oov, title_lens, title_mask = one2many_batch
+    one2many = opt.one2many
+    one2many_mode = opt.one2many_mode
+    if one2many and one2many_mode > 1:
+        num_predictions = opt.num_predictions
+    else:
+        num_predictions = 1
+
+    src = src.to(opt.device)
+    src_mask = src_mask.to(opt.device)
+    src_oov = src_oov.to(opt.device)
+    if opt.title_guided:
+        title = title.to(opt.device)
+        title_mask = title_mask.to(opt.device)
+    eos_idx = opt.word2idx[pykp.io.EOS_WORD]
+    delimiter_word = opt.delimiter_word
+    batch_size = src.size(0)
+    topk = opt.topk
+    reward_type = opt.reward_type
+    reward_shaping = opt.reward_shaping
+    baseline = opt.baseline
+    match_type = opt.match_type
+    regularization_type = opt.regularization_type  # # DNT
+    regularization_factor = opt.regularization_factor  # #DNT
+    if regularization_type == 2:
+        entropy_regularize = True
+    else:
+        entropy_regularize = False
+
+    start_time = time.time()
+    sample_list, log_selected_token_dist, output_mask, pred_eos_idx_mask, entropy, location_of_eos_for_each_batch, location_of_peos_for_each_batch = generator.sample(
+        src, src_lens, src_oov, src_mask, oov_lists, opt.max_length, greedy=False, one2many=one2many,
+        one2many_mode=one2many_mode, num_predictions=num_predictions, perturb_std=perturb_std,
+        entropy_regularize=entropy_regularize, title=title, title_lens=title_lens, title_mask=title_mask)
+    pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
+                                                delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
+                                                src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
+
+    # target_str_2dlist = convert_list_to_kphs(trg)
+
+    # gl: new
+    max_pred_seq_len = log_selected_token_dist.size(1)
+
+    if entropy_regularize:
+        entropy_array = entropy.data.cpu().numpy()
+    else:
+        entropy_array = None
+
+    if opt.perturb_baseline:
+        baseline_perturb_std = perturb_std
+    else:
+        baseline_perturb_std = 0
+
+    # if use self critical as baseline, greedily decode a sequence from the model
+    if baseline == 'self':
+        generator.model.eval()
+        with torch.no_grad():
+            start_time = time.time()
+            greedy_sample_list, _, _, greedy_eos_idx_mask, _, _, _ = generator.sample(src, src_lens, src_oov, src_mask,
+                                                                                      oov_lists, opt.max_length,
+                                                                                      greedy=True, one2many=one2many,
+                                                                                      one2many_mode=one2many_mode,
+                                                                                      num_predictions=num_predictions,
+                                                                                      perturb_std=baseline_perturb_std,
+                                                                                      title=title,
+                                                                                      title_lens=title_lens,
+                                                                                      title_mask=title_mask)
+            greedy_str_2dlist = sample_list_to_str_2dlist(greedy_sample_list, oov_lists, opt.idx2word, opt.vocab_size,
+                                                          eos_idx,
+                                                          delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
+                                                          src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
+        generator.model.train()
+
+    if torch.cuda.is_available():
+        devices = opt.gpuid
+    else:
+        devices = "cpu"
+
+    # total_abstract_loss = 0
+    # batch_mine = 0
+    # abstract_f = torch.Tensor([]).to(devices)
+    # kph_f = torch.Tensor([]).to(devices)
+    # h_kph_f_size = 0
+    # len_list_t, len_list_f = [], []
+
+    # gl: new part, Bert Discriminator
+    pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt)
+    greedy_idx_list = build_kps_idx_list(greedy_str_2dlist, bert_tokenizer, opt)
+    src_idx_list = build_src_idx_list(src_str_list, bert_tokenizer)
+    # torch.save(pred_idx_list, 'prova/pred_idx_list.pt')  # gl saving tensors
+    # torch.save(target_idx_list, 'prova/target_idx_list.pt')  # gl saving tensors
+
+    pred_train_batch, pred_mask_batch, pred_segment_batch, _ = \
+        build_training_batch(src_idx_list, pred_idx_list, bert_tokenizer, opt, label=0)
+    greedy_train_batch, greedy_mask_batch, greedy_segment_batch, _ = \
+        build_training_batch(src_idx_list, greedy_idx_list, bert_tokenizer, opt, label=1)
+
+    # gl: only for seq. class; for multi choice add targets variables
+    pred_train_batch = torch.tensor(pred_train_batch, dtype=torch.long).to(devices)
+    pred_mask_batch = torch.tensor(pred_mask_batch, dtype=torch.long).to(devices)
+    pred_segment_batch = torch.tensor(pred_segment_batch, dtype=torch.long).to(devices)
+    pred_rewards = np.zeros(batch_size)
+    for idx, (input_ids, input_mask, input_segment) in enumerate(
+            zip(pred_train_batch, pred_mask_batch, pred_segment_batch)):
+        # print(idx)
+        # print(input_ids)
+        # print(input_mask)
+        # print(input_segment)
+        output = D_model(input_ids.unsqueeze(0),
+                         attention_mask=input_mask.unsqueeze(0),
+                         token_type_ids=input_segment.unsqueeze(0),
+                         )
+        # print(output[0])
+        pred_rewards[idx] = output[0]
+    # torch.save(output, 'prova/last_output.pt')  # gl saving tensors
+
+    greedy_train_batch = torch.tensor(greedy_train_batch, dtype=torch.long).to(devices)
+    greedy_mask_batch = torch.tensor(greedy_mask_batch, dtype=torch.long).to(devices)
+    greedy_segment_batch = torch.tensor(greedy_segment_batch, dtype=torch.long).to(devices)
+    baseline_rewards = np.zeros(batch_size)
+    for idx, (input_ids, input_mask, input_segment) in enumerate(
+            zip(greedy_train_batch, greedy_mask_batch, greedy_segment_batch)):
+        # print(idx)
+        output = D_model(input_ids.unsqueeze(0),
+                         attention_mask=input_mask.unsqueeze(0),
+                         token_type_ids=input_segment.unsqueeze(0),
+                         )
+        # print(output[0])
+        baseline_rewards[idx] = output[0]
+    # torch.save(output, 'prova/last_output.pt')  # gl saving tensors
+
+    batch_rewards = pred_rewards - baseline_rewards
+    # print(pred_rewards)
+    # print(baseline_rewards)
+    # print(batch_rewards)
+    q_value_estimate_array = np.tile(batch_rewards.reshape([-1, 1]), [1, max_pred_seq_len])  # [batch, max_pred_seq_len]
+
+    q_value_estimate = torch.from_numpy(q_value_estimate_array).type(torch.FloatTensor).to(src.device)
+    q_value_estimate.requires_grad_(True)
+    q_estimate_compute_time = time_since(start_time)
+
+    # compute the policy gradient objective
+    pg_loss = compute_pg_loss(log_selected_token_dist, output_mask, q_value_estimate)
+    # print(pg_loss)
+
+    return pg_loss
+
+
+def main(opt):
+    # print("agsnf efnghrrqthg")
+    clip = 5
+    start_time = time.time()
+    train_data_loader, valid_data_loader, word2idx, idx2word, vocab = load_data_and_vocab(opt, load_train=True)
+    load_data_time = time_since(start_time)
+    logging.info('Time for loading the data: %.1f' % load_data_time)
+
+    print("______________________ Data Successfully Loaded ______________")
+    model = Seq2SeqModel(opt)
+    if torch.cuda.is_available():
+        model.load_state_dict(torch.load(opt.model_path))
+        model = model.to(opt.gpuid)
+    else:
+        model.load_state_dict(torch.load(opt.model_path, map_location="cpu"))
+
+    print("___________________ Generator Initialised and Loaded _________________________")
+    generator = SequenceGenerator(model,
+                                  bos_idx=opt.word2idx[pykp.io.BOS_WORD],
+                                  eos_idx=opt.word2idx[pykp.io.EOS_WORD],
+                                  pad_idx=opt.word2idx[pykp.io.PAD_WORD],
+                                  peos_idx=opt.word2idx[pykp.io.PEOS_WORD],
+                                  beam_size=1,
+                                  max_sequence_length=opt.max_length,
+                                  copy_attn=opt.copy_attention,
+                                  coverage_attn=opt.coverage_attn,
+                                  review_attn=opt.review_attn,
+                                  cuda=opt.gpuid > -1
+                                  )
+
+    init_perturb_std = opt.init_perturb_std
+    final_perturb_std = opt.final_perturb_std
+    perturb_decay_factor = opt.perturb_decay_factor
+    perturb_decay_mode = opt.perturb_decay_mode
+    hidden_dim = opt.D_hidden_dim
+    embedding_dim = opt.D_embedding_dim
+    n_layers = opt.D_layers
+
+    hidden_dim = opt.D_hidden_dim
+    embedding_dim = opt.D_embedding_dim
+    n_layers = opt.D_layers
+
+    bert_model = NLP_MODELS[opt.bert_model].choose()  # gl
+    bert_model_name = bert_model.model.__class__.__name__
+    print(bert_model_name)
+
+    if bert_model_name == 'BertForSequenceClassification':
+        D_model = NetModel.from_pretrained(bert_model.pretrained_weights,
+                                           num_labels=opt.bert_labels,
+                                           output_hidden_states=True,
+                                           output_attentions=False,
+                                           hidden_dropout_prob=0.1,
+                                           hidden_dim=hidden_dim,
+                                           n_layers=n_layers,
+                                           )
+    elif bert_model_name == 'BertForMultipleChoice':
+        D_model = NetModelMC.from_pretrained(bert_model.pretrained_weights,
+                                             output_hidden_states=True,
+                                             output_attentions=False,
+                                             hidden_dropout_prob=0.1,
+                                             hidden_dim=hidden_dim,
+                                             n_layers=n_layers,
+                                             )
+
+    bert_tokenizer = bert_model.tokenizer
+
+    print("The Discriminator Description is ", D_model)
+
+    PG_optimizer = torch.optim.Adagrad(model.parameters(), opt.learning_rate_rl)
+    if torch.cuda.is_available():
+        D_model.load_state_dict(torch.load(opt.Discriminator_model_path))
+        D_model = D_model.to(opt.gpuid)
+    else:
+        D_model.load_state_dict(torch.load(opt.Discriminator_model_path, map_location="cpu"))
+
+    # D_model.load_state_dict(torch.load("Discriminator_checkpts/D_model_combined1.pth.tar"))
+    total_epochs = opt.epochs
+    for epoch in range(total_epochs):
+
+        total_batch = 0
+        print("Starting with epoch:", epoch)
+        for batch_i, batch in enumerate(train_data_loader):
+
+            model.train()
+            PG_optimizer.zero_grad()
+
+            if perturb_decay_mode == 0:  # do not decay
+                perturb_std = init_perturb_std
+            elif perturb_decay_mode == 1:  # exponential decay
+                perturb_std = final_perturb_std + (init_perturb_std - final_perturb_std) * math.exp(
+                    -1. * total_batch * perturb_decay_factor)
+            elif perturb_decay_mode == 2:  # steps decay
+                perturb_std = init_perturb_std * math.pow(perturb_decay_factor, math.floor((1 + total_batch) / 4000))
+
+            avg_rewards = train_one_batch(D_model, batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name)
+
+            torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+            avg_rewards.backward()
+            PG_optimizer.step()
+
+            if batch_i % 4000 == 0:
+                print("Saving the file ...............----------->>>>>")
+                print("The avg reward is", -avg_rewards.item())
+                state_dfs = model.state_dict()
+                torch.save(state_dfs, "RL_Checkpoints/Attention_Generator_" + str(epoch) + ".pth.tar")
+
+######################################
