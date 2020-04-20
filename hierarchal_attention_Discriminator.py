@@ -189,7 +189,7 @@ class Discriminator(S_RNN):
     def Catter(self, kph, rewards, total_len):
         lengths = [len(kp) + 1 for kp in kph]
         max_len = max(lengths)
-        x = torch.Tensor([])
+        # x = torch.Tensor([])
         rewards_shape = rewards.repeat(max_len).reshape(-1, rewards.size(0)).t()
         x = torch.Tensor([])
         x = x.to(self.devices)
@@ -216,10 +216,10 @@ class Discriminator(S_RNN):
         x, hidden = self.MegaRNN(concat_output)
         output = self.Linear(x)
         output = output.squeeze(2).t()
-        avg_outputs = self.sigmoid(output)
+        avg_outputs = self.sigmoid(output)  # gl: important: fin qui è la forward attraverso MegaRNN, classificatore e softmax
         reward_outputs = torch.Tensor([]).to(self.devices)
         # print('len_list = ', len_list)  # 32 elementi, = batch
-        for i, len_i in enumerate(len_list):
+        for i, len_i in enumerate(len_list):  # gl: da qui in poi calcola effettivamente i rewards, prendendo la parte kp degli output; il tutto può essere valutato fuori dal D_model
             avg_outputs[i, start_len:start_len + len_i] = avg_outputs[i, start_len:start_len + len_i]
             batch_rewards = self.Catter(pred_str_list[i], avg_outputs[i, start_len:start_len + len_i], total_len)
             reward_outputs = torch.cat((reward_outputs, batch_rewards))  # gl: torch.Size([192]); dtype: torch.float32
