@@ -278,7 +278,7 @@ def train_opts(parser):
     #                    help="""0: ori, 1: running average as baseline""")
     parser.add_argument('-max_sample_length', default=6, type=int,
                         help="The max length of sequence that can be sampled by the model")
-    parser.add_argument('-max_length', type=int, default=12,  # gl was 6, raised to 12 to increment the number of pred. KPs
+    parser.add_argument('-max_length', type=int, default=60,  # gl was 6, raised to 12 and finally to 60 to match the value of RL project
                         help='Maximum prediction length.')
     parser.add_argument('-topk', type=str, default='M',
                         help='The only pick the top k predictions in reward.')
@@ -639,7 +639,7 @@ def interactive_predict_opts(parser):
 def bert_opts(parser):  # gl
     parser.add_argument('-bert_model', type=str, default='BERT',
                         help='Model from HuggingFace transformers (BERT, ALBERT, ... )')
-    parser.add_argument('-bert_labels', type=int, default=1,  # gl: only for sequence classification, 1 is for regression
+    parser.add_argument('-bert_labels', type=int, default=1,  # gl: only affects sequence classification, 1 is for regression
                         help='Labels for discriminator classification (2 almost always)')
     parser.add_argument('-bert_learning_rate', type=float, default=0.00001,  # gl: was 0.00004, then 0.00002
                         help='Learning rate for AdamW optimizer')

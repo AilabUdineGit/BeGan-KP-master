@@ -12,30 +12,17 @@ Created on Mon Jul  1 15:10:45 2019
 # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 # #############################################
 
+import math
+
 # ############################### IMPORT LIBRARIES ###############################################################
-import torch
 # import numpy as np
 import pykp.io
-import torch.nn as nn
-from utils.statistics import RewardStatistics
-from utils.time_log import time_since
-import time
-from sequence_generator import SequenceGenerator
-from utils.report import export_train_and_valid_loss, export_train_and_valid_reward
-import sys
-import logging
-import os
-from evaluate import evaluate_reward
 from pykp.reward import *
-import math
+from sequence_generator import SequenceGenerator
+
 EPS = 1e-8
-import argparse
-import config
 # import logging
 # import os
-import json
-from pykp.io import KeyphraseDataset
-from pykp.model import Seq2SeqModel
 # from torch.optim import Adam
 import pykp
 from pykp.model import Seq2SeqModel
@@ -46,12 +33,9 @@ from utils.time_log import time_since
 from utils.data_loader import load_data_and_vocab
 from utils.string_helper import convert_list_to_kphs
 import time
-import numpy as np
 import random
-from torch import device 
 # from hierarchal_attention_Discriminator import Discriminator
-from torch.nn import functional as F
-from BERT_Discriminator import NetModel, NetModelMC, NLPModel, NLP_MODELS
+from BERT_Discriminator import NetModel, NetModelMC, NLP_MODELS
 from transformers import AdamW
 # ####################################################################################################
 # def Check_Valid_Loss(valid_data_loader,D_model,batch,generator,opt,perturb_std):
@@ -210,16 +194,27 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         one2many_mode=one2many_mode, num_predictions=num_predictions, perturb_std=perturb_std,
         entropy_regularize=entropy_regularize, title=title, title_lens=title_lens, title_mask=title_mask)
     # torch.save(sample_list, 'prova/sample_list.pt')  # gl saving tensors
+    # torch.save(log_selected_token_dist, 'prova/log_selected_token_dist.pt')  # gl saving tensors
+    # torch.save(output_mask, 'prova/output_mask.pt')  # gl saving tensors
+    # print(opt.max_length)  # gl: opt.max_length=12
 
+    # pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
+    #                                             delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
+    #                                             src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
     pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
-                                                delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
-                                                src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
+                                                opt.word2idx[delimiter_word], opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
+                                                src_str_list, opt.separate_present_absent, opt.word2idx[pykp.io.PEOS_WORD])
     # torch.save(pred_str_kps, 'prova/pred_str_kps.pt')  # gl saving tensors
-    # torch.save(pred_str_2dlist, 'prova/pred_str_2dlist.pt')  # gl saving tensors
+    # torch.save(pred_str_2dlist, 'prova/pred_str_2dlist-sor.pt')  # gl saving tensors
     # print(len(pred_str_2dlist))
 
-    target_str_2dlist = convert_list_to_kphs(trg)
-    # torch.save(target_str_2dlist, 'prova/target_str_2dlist.pt')  # gl saving tensors
+    # target_str_2dlist = convert_list_to_kphs_old(trg)  # gl: original
+    target_str_2dlist = convert_list_to_kphs(trg, opt.separate_present_absent)
+    # print('*** trg ***')  # gl: debug
+    # print(trg)
+    # print(target_str_2dlist)
+    # print('***********')
+    # torch.save(target_str_2dlist, 'prova/target_str_2dlist-sor.pt')  # gl saving tensors
 
     # gl: 1. verificare se nelle 2 liste di KPs ce ne sono uguali ed eventualmente metterle all'inizio nello stesso ordine (così il Discriminator capisce che sono simili)
     # gl: alla fine G dovrebbe creare samples uguali a quelli veri ma non necessariamente nello steso ordine;
@@ -229,7 +224,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     #     if all(a in target_str_2dlist[i] for a in pred_str_2dlist[i]):
     #         print('same true and fake KPS at index=' + str(i))
 
-    # gl: 2. Bert tokens indexes (NOTA: probabilmente non ho più bisogno di creare le variabili BERT nel dataloader, perché tanto qui devo farlo per forza)
+    # gl: 2. Bert tokens indexes
     pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt)
     target_idx_list = build_kps_idx_list(target_str_2dlist, bert_tokenizer, opt)
     src_idx_list = build_src_idx_list(src_str_list, bert_tokenizer)
@@ -310,19 +305,14 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         positives = sum(torch.argmax(output[1], dim=1) == labels)
         sum_real = 0
         sum_fake = 0
-        for i in range(opt.batch_size):  # batch_size
-            if i > len(pred_train_batch) - 1 or i > len(target_train_batch) - 1:  # gl: batch could be not complete
-                break
+
+        for i, out in enumerate(output[1]):
             if labels[i].item() == 0:
-                sum_real += output[1][i][0]
-                sum_fake += output[1][i][1]
-                # if output[1][i][0] > output[1][i][1]:
-                #     positives += 1
+                sum_real += out[0]
+                sum_fake += out[1]
             elif labels[i].item() == 1:
-                sum_real += output[1][i][1]
-                sum_fake += output[1][i][0]
-                # if output[1][i][1] > output[1][i][0]:
-                #     positives += 1
+                sum_real += out[1]
+                sum_fake += out[0]
 
         avg_real = sum_real / (i + 1)
         avg_fake = sum_fake / (i + 1)
@@ -353,14 +343,6 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         # torch.save(target_input_labels, 'prova/target_input_labels.pt')  # gl saving tensors
 
         # gl: 5. forward pass
-        # print('pred_input_ids.shape:     ' + str(pred_input_ids.shape))
-        # print('pred_input_mask.shape:    ' + str(pred_input_mask.shape))
-        # print('pred_input_segment.shape: ' + str(pred_input_segment.shape))
-        # print('pred_input_labels.shape:  ' + str(pred_input_labels.shape))
-        # print('target_input_ids.shape:     ' + str(target_input_ids.shape))
-        # print('target_input_mask.shape:    ' + str(target_input_mask.shape))
-        # print('target_input_segment.shape: ' + str(target_input_segment.shape))
-        # print('target_input_labels.shape:  ' + str(target_input_labels.shape))
         pred_output = D_model(pred_input_ids,
                               attention_mask=pred_input_mask,
                               token_type_ids=pred_input_segment,
@@ -380,11 +362,10 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
             avg_real = torch.mean(target_output[1])
             avg_fake = torch.mean(pred_output[1])
 
-            for i in range(opt.batch_size):  # gl: evaluating a (custom) accuracy
-                if i > len(pred_train_batch) - 1 or i > len(target_train_batch) - 1:  # gl: batch could be not complete
-                    break
-                if target_output[1][i] > 0.5 > pred_output[1][i]:
+            for i, (target, prediction) in enumerate(zip(target_output[1], pred_output[1])):
+                if target > 0.5 > prediction:
                     positives += 1
+
         else:  # 2 classes classification
             # avg_real = torch.mean(target_output[1][:][:, 1])  # gl: media degli score della classe 1, ok se alta
             # avg_fake = torch.mean(pred_output[1][:][:, 0])  # gl: media degli score della classe 0, ok se alta
@@ -394,10 +375,8 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
             avg_real = sum(torch.argmax(target_output[1], dim=1) == target_input_labels) / target_input_labels.shape[0]
             avg_fake = sum(torch.argmax(pred_output[1], dim=1) == pred_input_labels) / pred_input_labels.shape[0]
 
-            for i in range(opt.batch_size):  # batch_size
-                if i > len(pred_train_batch) - 1 or i > len(target_train_batch) - 1:  # gl: batch could be not complete
-                    break
-                if (target_output[1][i][1] > target_output[1][i][0]) and (pred_output[1][i][0] > pred_output[1][i][1]):
+            for i, (target, prediction) in enumerate(zip(target_output[1], pred_output[1])):
+                if (target[1] > target[0]) and (prediction[0] > prediction[1]):
                     positives += 1
 
                 # print('target_output[1][i] : ' + str(target_output[1][i]))
@@ -417,6 +396,7 @@ def count_parameters(model):
 def main(opt):
     clip = 5
     start_time = time.time()
+    # opt.batch_size=150  # gl: used for debug of generated KPs in train_one_batch()
     train_data_loader, valid_data_loader, word2idx, idx2word, vocab = load_data_and_vocab(opt, load_train=True)
     # torch.save(train_data_loader, 'prova/train_data_loader.pt')  # gl
     # torch.save(valid_data_loader, 'prova/valid_data_loader.pt')  # gl saving tensors
