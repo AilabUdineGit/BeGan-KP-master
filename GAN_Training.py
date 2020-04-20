@@ -16,8 +16,9 @@ import argparse
 import config
 from Disc_train import main as D_train
 from Bert_Disc_train import main as D_Bert_train
-from Gen_RL_Train import main as G_train
-import torch 
+# from Gen_RL_Train import main as G_train
+from Gen_RL_Train_new import main as G_train
+import torch
 import random
 import numpy as np
 import pykp
@@ -81,7 +82,7 @@ def process_opt(opt):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='hierarchal_attention_Discriminator.py', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description='BERT_Discriminator.py', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     config.vocab_opts(parser)
     config.model_opts(parser)
     config.train_opts(parser)
@@ -105,3 +106,4 @@ if __name__ == "__main__":
 
     elif opt.train_rl:
         G_train(opt)
+        # G_train_original(opt)
