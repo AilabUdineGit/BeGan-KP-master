@@ -4,10 +4,8 @@ OpenNMT-py: https://github.com/OpenNMT/OpenNMT-py
 and seq2seq-keyphrase-pytorch: https://github.com/memray/seq2seq-keyphrase-pytorch
 """
 
-import sys
 import torch
-import pykp
-import logging
+
 from beam import Beam
 from beam import GNMTGlobalScorer
 
