@@ -257,8 +257,7 @@ def train_one_batch(one2many_batch, generator, optimizer, opt, perturb_std=0):
             phrase_baseline = compute_phrase_reward(greedy_str_2dlist, trg_str_2dlist, batch_size, max_num_greedy_phrases, reward_shaping,
                                                     reward_type, topk, match_type, regularization_factor, regularization_type, entropy_array)
             phrase_reward = phrase_reward - phrase_baseline
-        
-        
+
         # convert each phrase reward to its improvement in reward
         phrase_reward = shape_reward(phrase_reward)
                     
