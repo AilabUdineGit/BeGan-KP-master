@@ -19,11 +19,9 @@ from pykp.model import Seq2SeqModel
 
 from utils.time_log import time_since
 from utils.data_loader import load_data_and_vocab
-from utils.string_helper import convert_list_to_kphs
 import time
 from BERT_Discriminator import NetModel, NetModelMC, NLP_MODELS
 from Bert_Disc_train import build_kps_idx_list, build_src_idx_list, build_training_batch
-from torch.nn import functional as F
 
 #####################################################################################################
 
@@ -34,7 +32,7 @@ torch.autograd.set_detect_anomaly(True)
 #########################################################
 def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name):
     src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, _, \
-        title, title_oov, title_lens, title_mask = one2many_batch
+    title, title_oov, title_lens, title_mask = one2many_batch
     one2many = opt.one2many
     one2many_mode = opt.one2many_mode
     if one2many and one2many_mode > 1:
@@ -74,7 +72,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
 
     # target_str_2dlist = convert_list_to_kphs(trg)
 
-    # gl: new
+    # gl: new; log_selected_token_dist is related to eq. 1 in RL project paper
     max_pred_seq_len = log_selected_token_dist.size(1)
 
     if entropy_regularize:
@@ -103,7 +101,8 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
                                                                                       title_mask=title_mask)
             greedy_str_2dlist = sample_list_to_str_2dlist(greedy_sample_list, oov_lists, opt.idx2word, opt.vocab_size,
                                                           eos_idx,
-                                                          delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
+                                                          delimiter_word, opt.word2idx[pykp.io.UNK_WORD],
+                                                          opt.replace_unk,
                                                           src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
         generator.model.train()
 
@@ -111,13 +110,6 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         devices = opt.gpuid
     else:
         devices = "cpu"
-
-    # total_abstract_loss = 0
-    # batch_mine = 0
-    # abstract_f = torch.Tensor([]).to(devices)
-    # kph_f = torch.Tensor([]).to(devices)
-    # h_kph_f_size = 0
-    # len_list_t, len_list_f = [], []
 
     # gl: new part, Bert Discriminator
     pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt)
@@ -148,7 +140,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
                          )
         # print(output[0])
         pred_rewards[idx] = output[0]
-    # torch.save(output, 'prova/last_output.pt')  # gl saving tensors
+    # torch.save(pred_rewards, 'prova/pred_rewards.pt')  # gl saving tensors
 
     greedy_train_batch = torch.tensor(greedy_train_batch, dtype=torch.long).to(devices)
     greedy_mask_batch = torch.tensor(greedy_mask_batch, dtype=torch.long).to(devices)
@@ -163,12 +155,13 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
                          )
         # print(output[0])
         baseline_rewards[idx] = output[0]
-    # torch.save(output, 'prova/last_output.pt')  # gl saving tensors
+    # torch.save(baseline_rewards, 'prova/baseline_rewards.pt')  # gl saving tensors
 
     batch_rewards = pred_rewards - baseline_rewards
-    # print(pred_rewards)
-    # print(baseline_rewards)
-    # print(batch_rewards)
+    # torch.save(batch_rewards, 'prova/batch_rewards.pt')  # gl saving tensors
+    # print('pred_rewards     :' + str(pred_rewards))
+    # print('baseline_rewards :' + str(baseline_rewards))
+    # print('batch_rewards    :' + str(batch_rewards))
     q_value_estimate_array = np.tile(batch_rewards.reshape([-1, 1]), [1, max_pred_seq_len])  # [batch, max_pred_seq_len]
 
     q_value_estimate = torch.from_numpy(q_value_estimate_array).type(torch.FloatTensor).to(src.device)
@@ -176,8 +169,11 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     q_estimate_compute_time = time_since(start_time)
 
     # compute the policy gradient objective
+    # print('log_selected_token_dist  :' + str(log_selected_token_dist))
+    # print('output_mask              :' + str(output_mask))
+    # print('q_value_estimate         :' + str(q_value_estimate))
     pg_loss = compute_pg_loss(log_selected_token_dist, output_mask, q_value_estimate)
-    # print(pg_loss)
+    print('pg_loss                  :' + str(pg_loss.item()))
 
     return pg_loss
 
@@ -234,16 +230,12 @@ def main(opt):
                                            output_hidden_states=True,
                                            output_attentions=False,
                                            hidden_dropout_prob=0.1,
-                                           hidden_dim=hidden_dim,
-                                           n_layers=n_layers,
                                            )
     elif bert_model_name == 'BertForMultipleChoice':
         D_model = NetModelMC.from_pretrained(bert_model.pretrained_weights,
                                              output_hidden_states=True,
                                              output_attentions=False,
                                              hidden_dropout_prob=0.1,
-                                             hidden_dim=hidden_dim,
-                                             n_layers=n_layers,
                                              )
 
     bert_tokenizer = bert_model.tokenizer
