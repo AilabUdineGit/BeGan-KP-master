@@ -63,17 +63,13 @@ def build_kps_idx_list(kps, bert_tokenizer, opt):
         for kp in b:
             for w in kp:
                 if w == pykp.io.UNK_WORD:
-                    w = '[UNK]'  # gl: token inserito nel vocabolario di Bert corrispondente a <digit>
-                elif w == pykp.io.PEOS_WORD:
-                    w = '.'
-                # elif w == pykp.io.DIGIT:
-                #     w = '<digit>'  # gl: token inserito nel vocabolario di Bert corrispondente a <digit>
-                # else:  # gl: tutte le altre parole sono invalide e rendono la KP sbagliata (lasciare i valori
-                #     1 == 1  # lasciando la parola inalterata e classificandola come errata anche il suo valore sarà correttamente appreso come valore 'sbagliato' in quanto presente in una fake KP
+                    w = '[UNK]'
+                # elif w == pykp.io.PEOS_WORD:
+                #     w = '.'
                 str_kps += w + ' '
-            # str_kps += ';'  # gl: was '<eos>'
-            if str_kps[-2] != '.':  # nota: se w=pykp.io.PEOS_WORD allora ho già messo il punto, non mettere il punto e virgola
-                str_kps += ';'
+            # if str_kps[-2] != '.':  # nota: se w=pykp.io.PEOS_WORD allora ho già messo il punto, non mettere il punto e virgola
+            #     str_kps += ';'
+            str_kps += ';'  # gl: was '<eos>'
         str_kps += '[SEP]'
         # print(str_kps)
         bert_str_kps = bert_tokenizer.tokenize(str_kps)
@@ -99,7 +95,7 @@ def build_src_idx_list(src_str_list, bert_tokenizer):
         str_src = '[CLS]'
         for w in src:
             if w == pykp.io.UNK_WORD:
-                w = '[UNK]'  # gl: token inserito nel vocabolario di Bert corrispondente a <digit>
+                w = '[UNK]'
             # elif w == pykp.io.DIGIT:
             #     w = '<digit>'  # gl: token inserito nel vocabolario di Bert corrispondente a <digit>
             # else:  # gl: tutte le altre parole sono invalide e rendono la KP sbagliata (lasciare i valori
@@ -157,6 +153,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     #     _, title, title_oov, title_lens, title_mask, b_src, b_trg, b_src_str, b_trg_str, b_tok_map = one2many_batch # gl: old version with bert variables
     src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, \
         _, title, title_oov, title_lens, title_mask = one2many_batch
+    # print(trg)
     one2many = opt.one2many
     one2many_mode = opt.one2many_mode
     if one2many and one2many_mode > 1:
@@ -205,7 +202,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
                                                 opt.word2idx[delimiter_word], opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
                                                 src_str_list, opt.separate_present_absent, opt.word2idx[pykp.io.PEOS_WORD])
     # torch.save(pred_str_kps, 'prova/pred_str_kps.pt')  # gl saving tensors
-    # torch.save(pred_str_2dlist, 'prova/pred_str_2dlist-sor.pt')  # gl saving tensors
+    # torch.save(pred_str_2dlist, 'prova/pred_str_2dlist-sepp.pt')  # gl saving tensors
     # print(len(pred_str_2dlist))
 
     # target_str_2dlist = convert_list_to_kphs_old(trg)  # gl: original
@@ -230,6 +227,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     src_idx_list = build_src_idx_list(src_str_list, bert_tokenizer)
     # torch.save(pred_idx_list, 'prova/pred_idx_list.pt')  # gl saving tensors
     # torch.save(target_idx_list, 'prova/target_idx_list.pt')  # gl saving tensors
+    # torch.save(src_idx_list, 'prova/src_idx_list.pt')  # gl saving tensors
 
     # gl: 3. creare il batch di addestramento concatenando src sia con le fake che con le true KPs, limitando la lunghezza a 512 tokens e paddando
     # nota: sia per le true che per le fake KPS, src dovrebbe essere identico e quindi troncato alla stessa lunghezza
@@ -347,7 +345,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
                               attention_mask=pred_input_mask,
                               token_type_ids=pred_input_segment,
                               labels=pred_input_labels)
-        torch.save(pred_output, 'prova/pred_output.pt')  # gl saving tensors
+        # torch.save(pred_output, 'prova/pred_output.pt')  # gl saving tensors
 
         target_output = D_model(target_input_ids,
                                 attention_mask=target_input_mask,
@@ -363,8 +361,10 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
             avg_fake = torch.mean(pred_output[1])
 
             for i, (target, prediction) in enumerate(zip(target_output[1], pred_output[1])):
+                # print('target = ' + str(target.item()) + '; prediction = ' + str(prediction.item()))
                 if target > 0.5 > prediction:
                     positives += 1
+                    # print('positive!')
 
         else:  # 2 classes classification
             # avg_real = torch.mean(target_output[1][:][:, 1])  # gl: media degli score della classe 1, ok se alta
@@ -443,16 +443,12 @@ def main(opt):
                                            output_hidden_states=True,
                                            output_attentions=False,
                                            hidden_dropout_prob=0.1,
-                                           hidden_dim=hidden_dim,
-                                           n_layers=n_layers,
                                            )
     elif bert_model_name == 'BertForMultipleChoice':
         D_model = NetModelMC.from_pretrained(bert_model.pretrained_weights,
                                              output_hidden_states=True,
                                              output_attentions=False,
                                              hidden_dropout_prob=0.1,
-                                             hidden_dim=hidden_dim,
-                                             n_layers=n_layers,
                                              )
 
     # D_model = bert_model.model.from_pretrained('bert-base-uncased',  # gl: prova semplificata
@@ -540,7 +536,8 @@ def main(opt):
                     # print(batch_j)
                     # torch.save(valid_batch, 'prova/valid_batch_error.pt')  # gl saving tensors
                     total += 1
-                    valid_loss, valid_real, valid_fake, valid_positives = train_one_batch(D_model, valid_batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name)
+                    valid_loss, valid_real, valid_fake, valid_positives = \
+                        train_one_batch(D_model, valid_batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name)
                     valid_loss_total += valid_loss.cpu().detach().numpy()
                     valid_real_total += valid_real.cpu().detach().numpy()
                     valid_fake_total += valid_fake.cpu().detach().numpy()
