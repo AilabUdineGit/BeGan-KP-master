@@ -39,10 +39,14 @@ def prediction_to_sentence(prediction, idx2word, vocab_size, oov, eos_idx, unk_i
     return sentence
 
 
-def convert_list_to_kphs(keyphrases):
+def convert_list_to_kphs_old(keyphrases):
     total = []
     one_list = []
+    print('keyphrases')
+    print(keyphrases)
     for i, keyphrase in enumerate(keyphrases):
+        # print(i)  # gl: debug
+        # print(keyphrase)  # gl: debug
         # one_keyphrase = []
         # mapper = map(keyphrase,str)
         # mapper = ' '.join(mapper)
@@ -62,6 +66,52 @@ def convert_list_to_kphs(keyphrases):
                     one_list.append(one_keyphrase) 
                 one_keyphrase = []
         total.append(one_list)
+        print('one_list')
+        print(one_list)
+        one_list = []
+    # print(total[0])
+    return total
+
+
+def convert_list_to_kphs(keyphrases, separate_present_absent=False):
+    total = []
+    one_list = []
+    # print('keyphrases')  # gl: debug
+    # print(keyphrases)  # gl: debug
+    for i, keyphrase in enumerate(keyphrases):
+        # print(i)  # gl: debug
+        # print(keyphrase)  # gl: debug
+        # one_keyphrase = []
+        # mapper = map(keyphrase,str)
+        # mapper = ' '.join(mapper)
+        # print(mapper)
+        one_keyphrase = []
+        for j, word_keyphrase in enumerate(keyphrase):
+            # print(word_keyphrase)
+            if int(word_keyphrase.item()) == 2:
+                if one_keyphrase != []:
+                    one_list.append(one_keyphrase)
+                break
+            elif int(word_keyphrase.item()) == 5:
+                if separate_present_absent:
+                    if one_keyphrase != []:
+                        one_list.append(one_keyphrase)
+                    one_list.append([int(word_keyphrase.item())])
+                    one_keyphrase = []
+                else:
+                    if one_keyphrase != []:
+                        one_list.append(one_keyphrase)
+                    one_keyphrase = []
+            elif int(word_keyphrase.item()) != 4:
+                # print("fdedh")
+                one_keyphrase.append(int(word_keyphrase.item()))
+            else:
+                if one_keyphrase != []:
+                    one_list.append(one_keyphrase)
+                one_keyphrase = []
+        total.append(one_list)
+        # print('one_list')  # gl: debug
+        # print(one_list)  # gl: debug
         one_list = []
     # print(total[0])
     return total
@@ -121,21 +171,29 @@ def split_word_list_by_delimiter(word_list, keyphrase_delimiter, include_present
         assert present_absent_delimiter is not None
     tmp_pred_str_list = []
     tmp_word_list = []
+    # print(word_list)  # gl: debug
     for word in word_list:
         # print("The asf IS",keyphrase_delimiter)
-        keyphrase_delimiter = 4
+        # keyphrase_delimiter = 4  # gl: non necessario
         if word == keyphrase_delimiter:
             if len(tmp_word_list) > 0:
                 tmp_pred_str_list.append(tmp_word_list)
                 tmp_word_list = []
-        elif word == present_absent_delimiter and include_present_absent_delimiter:
-            if len(tmp_word_list) > 0:
-                tmp_pred_str_list.append(tmp_word_list)
-                tmp_word_list = []
-            tmp_pred_str_list.append([present_absent_delimiter])
+        # elif word == present_absent_delimiter and include_present_absent_delimiter:  # gl: se w=<peos> ma include_present_absent_delimiter=False, aggiunge <peos> alla lista,non va bene
+        #     if len(tmp_word_list) > 0:
+        #         tmp_pred_str_list.append(tmp_word_list)
+        #         tmp_word_list = []
+        #     tmp_pred_str_list.append([present_absent_delimiter])
+        elif word == present_absent_delimiter:  # gl: così gestisce <peos> solo nel caso separated, mentre lo tralascia nel caso sorted
+            if include_present_absent_delimiter:
+                if len(tmp_word_list) > 0:
+                    tmp_pred_str_list.append(tmp_word_list)
+                    tmp_word_list = []
+                tmp_pred_str_list.append([present_absent_delimiter])
         else:
             tmp_word_list.append(word)
 
     if len(tmp_word_list) > 0:  # append the final keyphrase to the pred_str_list
         tmp_pred_str_list.append(tmp_word_list)
+    # print(tmp_pred_str_list)  # gl: debug
     return tmp_pred_str_list

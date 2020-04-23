@@ -1,8 +1,6 @@
-import numpy as np
-from utils.string_helper import *
-from evaluate_prediction import *
 import torch
-import sys
+
+from evaluate_prediction import *
 
 
 def sample_list_to_str_2dlist(sample_list, oov_lists, idx2word, vocab_size, eos_idx, delimiter_word, unk_idx=None, replace_unk=False, src_str_list=None, separate_present_absent=False, present_absent_delimiter_word=None):
