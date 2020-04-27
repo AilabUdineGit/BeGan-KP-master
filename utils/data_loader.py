@@ -1,9 +1,9 @@
-import torch
 import logging
-from pykp.io import KeyphraseDataset
+
+import torch
 from torch.utils.data import DataLoader
-import sys
-import os
+
+from pykp.io import KeyphraseDataset
 
 
 def load_vocab(opt):
