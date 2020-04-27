@@ -1,6 +1,5 @@
 from nltk.stem.porter import *
 stemmer = PorterStemmer()
-import pykp
 
 
 def prediction_to_sentence(prediction, idx2word, vocab_size, oov, eos_idx, unk_idx=None, replace_unk=False, src_word_list=None, attn_dist=None):
@@ -14,7 +13,7 @@ def prediction_to_sentence(prediction, idx2word, vocab_size, oov, eos_idx, unk_i
         _pred = int(pred.item())  # convert zero dim tensor to int
         if i == len(prediction) - 1 and _pred == eos_idx:  # ignore the final EOS token
             break
-        replace_unk = False
+        # replace_unk = False  # gl: old code
         if _pred < vocab_size:
             if _pred == unk_idx and replace_unk:
                 assert src_word_list is not None and attn_dist is not None, "If you need to replace unk, you must supply src_word_list and attn_dist"
@@ -26,14 +25,14 @@ def prediction_to_sentence(prediction, idx2word, vocab_size, oov, eos_idx, unk_i
                     word = src_word_list[int(max_attn_idx[1].item())]
                     # word = pykp.io.EOS_WORD
             else:
-                # word = idx2word[_pred]
+                word = idx2word[_pred]  # gl: resume of original code
                 # print("The ",_pred," is")
                 # word = idx2word[_pred]
-                word = _pred
+                # word = _pred  # gl: old code
         else:
             # word = oov[pred - vocab_size]
-            # word = oov[_pred - vocab_size]
-            word = _pred - vocab_size
+            word = oov[_pred - vocab_size]  # gl: resume of original code
+            # word = _pred - vocab_size  # gl: old code
         sentence.append(word)
     
     return sentence
@@ -54,11 +53,11 @@ def convert_list_to_kphs_old(keyphrases):
         one_keyphrase = []
         for j, word_keyphrase in enumerate(keyphrase):
             # print(word_keyphrase)
-            if int(word_keyphrase.item()) == 2:
+            if int(word_keyphrase.item()) == 2:  # gl: <eos>
                 if one_keyphrase != []:
                     one_list.append(one_keyphrase) 
                 break                
-            elif int(word_keyphrase.item()) != 4 and int(word_keyphrase.item()) != 5:
+            elif int(word_keyphrase.item()) != 4 and int(word_keyphrase.item()) != 5:  # gl: 4=<sep>; 5=<peos>
                 # print("fdedh")
                 one_keyphrase.append(int(word_keyphrase.item()))
             else:
@@ -73,7 +72,7 @@ def convert_list_to_kphs_old(keyphrases):
     return total
 
 
-def convert_list_to_kphs(keyphrases, separate_present_absent=False):
+def convert_list_to_kphs(keyphrases, eos_word, sep_word, peos_word, separate_present_absent=False):
     total = []
     one_list = []
     # print('keyphrases')  # gl: debug
@@ -88,23 +87,28 @@ def convert_list_to_kphs(keyphrases, separate_present_absent=False):
         one_keyphrase = []
         for j, word_keyphrase in enumerate(keyphrase):
             # print(word_keyphrase)
-            if int(word_keyphrase.item()) == 2:
+            # if int(word_keyphrase.item()) == 2:  # gl: old code
+            if str(word_keyphrase.item()) == eos_word:
                 if one_keyphrase != []:
                     one_list.append(one_keyphrase)
                 break
-            elif int(word_keyphrase.item()) == 5:
+            # elif int(word_keyphrase.item()) == 5:
+            elif str(word_keyphrase.item()) == peos_word:
                 if separate_present_absent:
                     if one_keyphrase != []:
                         one_list.append(one_keyphrase)
-                    one_list.append([int(word_keyphrase.item())])
+                    # one_list.append([int(word_keyphrase.item())])  # gl: old code
+                    one_list.append([str(word_keyphrase.item())])
                     one_keyphrase = []
                 else:
                     if one_keyphrase != []:
                         one_list.append(one_keyphrase)
                     one_keyphrase = []
-            elif int(word_keyphrase.item()) != 4:
+            # elif int(word_keyphrase.item()) != 4:  # gl: old code
+            elif str(word_keyphrase.item()) != sep_word:
                 # print("fdedh")
-                one_keyphrase.append(int(word_keyphrase.item()))
+                # one_keyphrase.append(int(word_keyphrase.item()))  # gl: old code
+                one_keyphrase.append(str(word_keyphrase.item()))
             else:
                 if one_keyphrase != []:
                     one_list.append(one_keyphrase)
