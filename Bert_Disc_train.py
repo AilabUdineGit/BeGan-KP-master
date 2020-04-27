@@ -37,9 +37,11 @@ import random
 # from hierarchal_attention_Discriminator import Discriminator
 from BERT_Discriminator import NetModel, NetModelMC, NLP_MODELS
 from transformers import AdamW
+
+
 # ####################################################################################################
 # def Check_Valid_Loss(valid_data_loader,D_model,batch,generator,opt,perturb_std):
-    
+
 # #### TUNE HYPERPARAMETERS ##############
 
 # #  batch_reward_stat, log_selected_token_dist = train_one_batch(batch, generator, optimizer_rl, opt, perturb_std)
@@ -49,16 +51,17 @@ from transformers import AdamW
 def build_kps_idx_list(kps, bert_tokenizer, opt):
     """
     evaluate the BERT tokenization for list of KPs
-    :param kps: list of indexes of each word of KPs, for each src in batch
+    :param kps: list of (indexes of each word) words of KPs, for each src in batch
     :param bert_tokenizer: BERT tokenizer
-    :param opt: optins values of the project
+    :param opt: options values of the project
     :return: list of BERT indexes of each word of KPs, for each src in batch
     """
-    str_kps_list = [[[opt.idx2word[w] for w in kp] for kp in b] for b in kps]
-    # print(str_kps_list)
+    # str_kps_list = [[[opt.idx2word[w] for w in kp] for kp in b] for b in kps]
+    # print(str_kps_list)  # gl: debug
     str_list = []
     idx_list = []
-    for b in str_kps_list:
+    # for b in str_kps_list:
+    for b in kps:
         str_kps = '[SEP]'
         for kp in b:
             for w in kp:
@@ -127,13 +130,13 @@ def build_training_batch(src, kps, bert_tokenizer, opt, label):
     training_batch = []
     mask_batch = []
     segment_batch = []
-    label_batch = [label]*len(kps)
-    pad_list = [bert_tokenizer.pad_token_id]*opt.bert_max_length
+    label_batch = [label] * len(kps)
+    pad_list = [bert_tokenizer.pad_token_id] * opt.bert_max_length
     for i in range(len(kps)):
         t = src[i][:opt.bert_max_length - len(kps[i])] + kps[i] + pad_list
         t = t[:opt.bert_max_length]
         m = [1 if k != bert_tokenizer.pad_token_id else 0 for k in t]
-        s = [1]*(min(opt.bert_max_length-len(kps[i]), len(src[i])) + 1) + [0]*opt.bert_max_length
+        s = [1] * (min(opt.bert_max_length - len(kps[i]), len(src[i])) + 1) + [0] * opt.bert_max_length
         s = s[:opt.bert_max_length]
         training_batch.append(t)
         mask_batch.append(m)
@@ -153,7 +156,8 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     #     _, title, title_oov, title_lens, title_mask, b_src, b_trg, b_src_str, b_trg_str, b_tok_map = one2many_batch # gl: old version with bert variables
     src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, \
         _, title, title_oov, title_lens, title_mask = one2many_batch
-    # print(trg)
+    # print('trg_str_2dlist')  # gl: debug
+    # print(trg_str_2dlist)  # gl: debug
     one2many = opt.one2many
     one2many_mode = opt.one2many_mode
     if one2many and one2many_mode > 1:
@@ -195,20 +199,23 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     # torch.save(output_mask, 'prova/output_mask.pt')  # gl saving tensors
     # print(opt.max_length)  # gl: opt.max_length=12
 
-    # pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
-    #                                             delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
-    #                                             src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
     pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
-                                                opt.word2idx[delimiter_word], opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
-                                                src_str_list, opt.separate_present_absent, opt.word2idx[pykp.io.PEOS_WORD])
+                                                delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
+                                                src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
+    # pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
+    #                                             opt.word2idx[delimiter_word], opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
+    #                                             src_str_list, opt.separate_present_absent, opt.word2idx[pykp.io.PEOS_WORD])
     # torch.save(pred_str_kps, 'prova/pred_str_kps.pt')  # gl saving tensors
     # torch.save(pred_str_2dlist, 'prova/pred_str_2dlist-sepp.pt')  # gl saving tensors
     # print(len(pred_str_2dlist))
+    # print('pred_str_2dlist')  # gl: debug
+    # print(pred_str_2dlist)  # gl: debug
 
     # target_str_2dlist = convert_list_to_kphs_old(trg)  # gl: original
-    target_str_2dlist = convert_list_to_kphs(trg, opt.separate_present_absent)
+    # target_str_2dlist = convert_list_to_kphs(trg, pykp.io.EOS_WORD, pykp.io.SEP_WORD, pykp.io.PEOS_WORD, opt.separate_present_absent)
+    # target_str_2dlist = trg_str_2dlist
     # print('*** trg ***')  # gl: debug
-    # print(trg)
+    # print(pykp.io.EOS_WORD)
     # print(target_str_2dlist)
     # print('***********')
     # torch.save(target_str_2dlist, 'prova/target_str_2dlist-sor.pt')  # gl saving tensors
@@ -223,7 +230,8 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
 
     # gl: 2. Bert tokens indexes
     pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt)
-    target_idx_list = build_kps_idx_list(target_str_2dlist, bert_tokenizer, opt)
+    # target_idx_list = build_kps_idx_list(target_str_2dlist, bert_tokenizer, opt)
+    target_idx_list = build_kps_idx_list(trg_str_2dlist, bert_tokenizer, opt)
     src_idx_list = build_src_idx_list(src_str_list, bert_tokenizer)
     # torch.save(pred_idx_list, 'prova/pred_idx_list.pt')  # gl saving tensors
     # torch.save(target_idx_list, 'prova/target_idx_list.pt')  # gl saving tensors
@@ -321,7 +329,8 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         pred_input_ids = torch.tensor(pred_train_batch, dtype=torch.long).to(devices)
         target_input_ids = torch.tensor(target_train_batch, dtype=torch.long).to(devices)
         pred_input_mask = torch.tensor(pred_mask_batch, dtype=torch.float).to(devices)  # gl: was dtype=torch.float32
-        target_input_mask = torch.tensor(target_mask_batch, dtype=torch.float).to(devices)  # gl: was dtype=torch.float32
+        target_input_mask = torch.tensor(target_mask_batch, dtype=torch.float).to(
+            devices)  # gl: was dtype=torch.float32
         pred_input_segment = torch.tensor(pred_segment_batch, dtype=torch.long).to(devices)
         target_input_segment = torch.tensor(target_segment_batch, dtype=torch.long).to(devices)
         if opt.bert_labels == 1:
@@ -515,11 +524,13 @@ def main(opt):
             if perturb_decay_mode == 0:  # do not decay
                 perturb_std = init_perturb_std
             elif perturb_decay_mode == 1:  # exponential decay
-                perturb_std = final_perturb_std + (init_perturb_std - final_perturb_std) * math.exp(-1. * total_batch * perturb_decay_factor)
+                perturb_std = final_perturb_std + (init_perturb_std - final_perturb_std) * math.exp(
+                    -1. * total_batch * perturb_decay_factor)
             elif perturb_decay_mode == 2:  # steps decay
-                perturb_std = init_perturb_std * math.pow(perturb_decay_factor, math.floor((1+total_batch)/4000))
+                perturb_std = init_perturb_std * math.pow(perturb_decay_factor, math.floor((1 + total_batch) / 4000))
             # torch.save(batch, 'prova/batch.pt')  # gl saving tensors
-            avg_batch_loss, _, _, _ = train_one_batch(D_model, batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name)
+            avg_batch_loss, _, _, _ = train_one_batch(D_model, batch, generator, opt, perturb_std, bert_tokenizer,
+                                                      bert_model_name)
             torch.nn.utils.clip_grad_norm_(D_model.parameters(), clip)
             avg_batch_loss.backward()
 
@@ -537,7 +548,8 @@ def main(opt):
                     # torch.save(valid_batch, 'prova/valid_batch_error.pt')  # gl saving tensors
                     total += 1
                     valid_loss, valid_real, valid_fake, valid_positives = \
-                        train_one_batch(D_model, valid_batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name)
+                        train_one_batch(D_model, valid_batch, generator, opt, perturb_std, bert_tokenizer,
+                                        bert_model_name)
                     valid_loss_total += valid_loss.cpu().detach().numpy()
                     valid_real_total += valid_real.cpu().detach().numpy()
                     valid_fake_total += valid_fake.cpu().detach().numpy()
