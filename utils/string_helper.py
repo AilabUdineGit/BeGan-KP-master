@@ -189,6 +189,7 @@ def split_word_list_by_delimiter(word_list, keyphrase_delimiter, include_present
         #         tmp_word_list = []
         #     tmp_pred_str_list.append([present_absent_delimiter])
         elif word == present_absent_delimiter:  # gl: così gestisce <peos> solo nel caso separated, mentre lo tralascia nel caso sorted
+            print('<peos> found in generated sample!')  # gl: debug
             if include_present_absent_delimiter:
                 if len(tmp_word_list) > 0:
                     tmp_pred_str_list.append(tmp_word_list)

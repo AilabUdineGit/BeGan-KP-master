@@ -26,15 +26,11 @@ EPS = 1e-8
 # from torch.optim import Adam
 import pykp
 from pykp.model import Seq2SeqModel
-# import train_ml
-# import train_rl
 
 from utils.time_log import time_since
 from utils.data_loader import load_data_and_vocab
-from utils.string_helper import convert_list_to_kphs
 import time
 import random
-# from hierarchal_attention_Discriminator import Discriminator
 from BERT_Discriminator import NetModel, NetModelMC, NLP_MODELS
 from transformers import AdamW
 
@@ -48,16 +44,92 @@ from transformers import AdamW
 #########################################################
 
 
-def build_kps_idx_list(kps, bert_tokenizer, opt):
+# def build_kps_idx_list(kps, bert_tokenizer, opt):
+#     """
+#     evaluate the BERT tokenization for list of KPs
+#     :param kps: list of indexes of each word of KPs, for each src in batch
+#     :param bert_tokenizer: BERT tokenizer
+#     :param opt: optins values of the project
+#     :return: list of BERT indexes of each word of KPs, for each src in batch
+#     """
+#     str_kps_list = [[[opt.idx2word[w] for w in kp] for kp in b] for b in kps]
+#     # print(str_kps_list)
+#     str_list = []
+#     idx_list = []
+#     for b in str_kps_list:
+#         str_kps = '[SEP]'
+#         for kp in b:
+#             for w in kp:
+#                 if w == pykp.io.UNK_WORD:
+#                     w = '[UNK]'  # gl: token inserito nel vocabolario di Bert corrispondente a <digit>
+#                 elif w == pykp.io.PEOS_WORD:
+#                     w = '.'
+#                 # elif w == pykp.io.DIGIT:
+#                 #     w = '<digit>'  # gl: token inserito nel vocabolario di Bert corrispondente a <digit>
+#                 # else:  # gl: tutte le altre parole sono invalide e rendono la KP sbagliata (lasciare i valori
+#                 #     1 == 1  # lasciando la parola inalterata e classificandola come errata anche il suo valore sarà correttamente appreso come valore 'sbagliato' in quanto presente in una fake KP
+#                 str_kps += w + ' '
+#             # str_kps += ';'  # gl: was '<eos>'
+#             if str_kps[-2] != '.':  # nota: se w=pykp.io.PEOS_WORD allora ho già messo il punto, non mettere il punto e virgola
+#                 str_kps += ';'
+#         str_kps += '[SEP]'
+#         # print(str_kps)
+#         bert_str_kps = bert_tokenizer.tokenize(str_kps)
+#         str_list.append(bert_str_kps)
+#         idx_list.append(bert_tokenizer.convert_tokens_to_ids(bert_str_kps))  # rivedere bene
+#     # print(str_list)
+#     # print(idx_list)
+#
+#     return idx_list
+
+
+# def build_kps_idx_list_standard(kps, bert_tokenizer, separate_present_absent):
+#     """
+#     evaluate the BERT tokenization for list of KPs
+#     :param kps: list of (indexes of each word) words of KPs, for each src in batch
+#     :param bert_tokenizer: BERT tokenizer
+#     :param separate_present_absent: if True present and absent KPs will be separated by a '.' token
+#     :return: list of BERT indexes of each word of KPs, for each src in batch
+#     """
+#     # str_kps_list = [[[opt.idx2word[w] for w in kp] for kp in b] for b in kps]
+#     # print()  # gl: debug
+#     # print(kps)  # gl: debug
+#     str_list = []
+#     idx_list = []
+#     # for b in str_kps_list:
+#     for b in kps:
+#         str_kps = '[SEP]'
+#         for kp in b:
+#             for w in kp:
+#                 if w == pykp.io.UNK_WORD:
+#                     w = '[UNK]'
+#                 elif w == pykp.io.PEOS_WORD and separate_present_absent:
+#                     w = '.'
+#                 str_kps += w + ' '
+#             if str_kps[-2] != '.':  # nota: se w=pykp.io.PEOS_WORD allora ho già messo il punto, non mettere il punto e virgola
+#                 str_kps += ';'
+#         str_kps += '[SEP]'
+#         # print(str_kps)
+#         bert_str_kps = bert_tokenizer.tokenize(str_kps)
+#         str_list.append(bert_str_kps)
+#         idx_list.append(bert_tokenizer.convert_tokens_to_ids(bert_str_kps))  # rivedere bene
+#     # print(str_list)
+#     # print(idx_list)
+#
+#     return idx_list
+
+
+def build_kps_idx_list(kps, bert_tokenizer, separate_present_absent):
     """
     evaluate the BERT tokenization for list of KPs
     :param kps: list of (indexes of each word) words of KPs, for each src in batch
     :param bert_tokenizer: BERT tokenizer
-    :param opt: options values of the project
+    :param separate_present_absent: if True present and absent KPs will be separated by a '.' token
     :return: list of BERT indexes of each word of KPs, for each src in batch
     """
     # str_kps_list = [[[opt.idx2word[w] for w in kp] for kp in b] for b in kps]
-    # print(str_kps_list)  # gl: debug
+    # print()  # gl: debug
+    # print(kps)  # gl: debug
     str_list = []
     idx_list = []
     # for b in str_kps_list:
@@ -67,13 +139,17 @@ def build_kps_idx_list(kps, bert_tokenizer, opt):
             for w in kp:
                 if w == pykp.io.UNK_WORD:
                     w = '[UNK]'
-                # elif w == pykp.io.PEOS_WORD:
-                #     w = '.'
+                elif w == pykp.io.PEOS_WORD:
+                    if separate_present_absent:
+                        w = '.'
+                    else:
+                        w = ''
                 str_kps += w + ' '
-            # if str_kps[-2] != '.':  # nota: se w=pykp.io.PEOS_WORD allora ho già messo il punto, non mettere il punto e virgola
-            #     str_kps += ';'
-            str_kps += ';'  # gl: was '<eos>'
+            if str_kps[-2] != '.':  # nota: se w=pykp.io.PEOS_WORD allora ho già messo il punto, non mettere il punto e virgola
+                str_kps += ';'
         str_kps += '[SEP]'
+        str_kps = str_kps.replace('[SEP] ;', '[SEP] ')
+        str_kps = str_kps.replace(' ; ;', ' ;')
         # print(str_kps)
         bert_str_kps = bert_tokenizer.tokenize(str_kps)
         str_list.append(bert_str_kps)
@@ -127,6 +203,8 @@ def build_training_batch(src, kps, bert_tokenizer, opt, label):
     :param label: 1 for true KPs; 0 for fake KPs
     :return:
     """
+    # print([len(d) for d in src])
+    # print([len(k) for k in kps])
     training_batch = []
     mask_batch = []
     segment_batch = []
@@ -158,6 +236,8 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         _, title, title_oov, title_lens, title_mask = one2many_batch
     # print('trg_str_2dlist')  # gl: debug
     # print(trg_str_2dlist)  # gl: debug
+    # print([len(d) for d in src_str_list])
+    # print()
     one2many = opt.one2many
     one2many_mode = opt.one2many_mode
     if one2many and one2many_mode > 1:
@@ -190,35 +270,19 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     else:
         entropy_regularize = False
     start_time = time.time()
+    # print(opt.max_length)
     sample_list, log_selected_token_dist, output_mask, pred_eos_idx_mask, entropy, location_of_eos_for_each_batch, location_of_peos_for_each_batch = generator.sample(
         src, src_lens, src_oov, src_mask, oov_lists, opt.max_length, greedy=False, one2many=one2many,
         one2many_mode=one2many_mode, num_predictions=num_predictions, perturb_std=perturb_std,
         entropy_regularize=entropy_regularize, title=title, title_lens=title_lens, title_mask=title_mask)
-    # torch.save(sample_list, 'prova/sample_list.pt')  # gl saving tensors
-    # torch.save(log_selected_token_dist, 'prova/log_selected_token_dist.pt')  # gl saving tensors
-    # torch.save(output_mask, 'prova/output_mask.pt')  # gl saving tensors
-    # print(opt.max_length)  # gl: opt.max_length=12
 
     pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
                                                 delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
                                                 src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
-    # pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
-    #                                             opt.word2idx[delimiter_word], opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
-    #                                             src_str_list, opt.separate_present_absent, opt.word2idx[pykp.io.PEOS_WORD])
-    # torch.save(pred_str_kps, 'prova/pred_str_kps.pt')  # gl saving tensors
-    # torch.save(pred_str_2dlist, 'prova/pred_str_2dlist-sepp.pt')  # gl saving tensors
-    # print(len(pred_str_2dlist))
-    # print('pred_str_2dlist')  # gl: debug
+    # print()
+    # print(trg_str_2dlist)  # gl: debug
     # print(pred_str_2dlist)  # gl: debug
-
-    # target_str_2dlist = convert_list_to_kphs_old(trg)  # gl: original
-    # target_str_2dlist = convert_list_to_kphs(trg, pykp.io.EOS_WORD, pykp.io.SEP_WORD, pykp.io.PEOS_WORD, opt.separate_present_absent)
-    # target_str_2dlist = trg_str_2dlist
-    # print('*** trg ***')  # gl: debug
-    # print(pykp.io.EOS_WORD)
-    # print(target_str_2dlist)
-    # print('***********')
-    # torch.save(target_str_2dlist, 'prova/target_str_2dlist-sor.pt')  # gl saving tensors
+    # print(src_str_list)  # gl: debug
 
     # gl: 1. verificare se nelle 2 liste di KPs ce ne sono uguali ed eventualmente metterle all'inizio nello stesso ordine (così il Discriminator capisce che sono simili)
     # gl: alla fine G dovrebbe creare samples uguali a quelli veri ma non necessariamente nello steso ordine;
@@ -229,13 +293,10 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     #         print('same true and fake KPS at index=' + str(i))
 
     # gl: 2. Bert tokens indexes
-    pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt)
+    pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt.separate_present_absent)
     # target_idx_list = build_kps_idx_list(target_str_2dlist, bert_tokenizer, opt)
-    target_idx_list = build_kps_idx_list(trg_str_2dlist, bert_tokenizer, opt)
+    target_idx_list = build_kps_idx_list(trg_str_2dlist, bert_tokenizer, opt.separate_present_absent)
     src_idx_list = build_src_idx_list(src_str_list, bert_tokenizer)
-    # torch.save(pred_idx_list, 'prova/pred_idx_list.pt')  # gl saving tensors
-    # torch.save(target_idx_list, 'prova/target_idx_list.pt')  # gl saving tensors
-    # torch.save(src_idx_list, 'prova/src_idx_list.pt')  # gl saving tensors
 
     # gl: 3. creare il batch di addestramento concatenando src sia con le fake che con le true KPs, limitando la lunghezza a 512 tokens e paddando
     # nota: sia per le true che per le fake KPS, src dovrebbe essere identico e quindi troncato alla stessa lunghezza
@@ -243,16 +304,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         build_training_batch(src_idx_list, pred_idx_list, bert_tokenizer, opt, label=0)
     target_train_batch, target_mask_batch, target_segment_batch, target_label_batch = \
         build_training_batch(src_idx_list, target_idx_list, bert_tokenizer, opt, label=1)
-    # torch.save(pred_train_batch, 'prova/pred_train_batch.pt')  # gl saving tensors
-    # torch.save(pred_mask_batch, 'prova/pred_mask_batch.pt')  # gl saving tensors
-    # torch.save(pred_segment_batch, 'prova/pred_segment_batch.pt')  # gl saving tensors
-    # torch.save(pred_label_batch, 'prova/pred_label_batch.pt')  # gl saving tensors
-    # torch.save(target_train_batch, 'prova/target_train_batch.pt')  # gl saving tensors
-    # torch.save(target_mask_batch, 'prova/target_mask_batch.pt')  # gl saving tensors
-    # torch.save(target_segment_batch, 'prova/target_segment_batch.pt')  # gl saving tensors
-    # torch.save(target_label_batch, 'prova/target_label_batch.pt')  # gl saving tensors
 
-    # print(bert_model_name)
     if bert_model_name == 'BertForMultipleChoice':
 
         input_ids = []
@@ -292,10 +344,6 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         labels = torch.tensor(labels, dtype=torch.long).to(devices)
         input_mask = torch.tensor(input_mask, dtype=torch.long).to(devices)
         input_segment = torch.tensor(input_segment, dtype=torch.long).to(devices)
-        # torch.save(input_ids, 'prova/input_ids.pt')  # gl saving tensors
-        # torch.save(labels, 'prova/labels.pt')  # gl saving tensors
-        # torch.save(input_mask, 'prova/input_mask.pt')  # gl saving tensors
-        # torch.save(input_segment, 'prova/input_segment.pt')  # gl saving tensors
 
         output = D_model(input_ids,
                          attention_mask=input_mask,
@@ -329,8 +377,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         pred_input_ids = torch.tensor(pred_train_batch, dtype=torch.long).to(devices)
         target_input_ids = torch.tensor(target_train_batch, dtype=torch.long).to(devices)
         pred_input_mask = torch.tensor(pred_mask_batch, dtype=torch.float).to(devices)  # gl: was dtype=torch.float32
-        target_input_mask = torch.tensor(target_mask_batch, dtype=torch.float).to(
-            devices)  # gl: was dtype=torch.float32
+        target_input_mask = torch.tensor(target_mask_batch, dtype=torch.float).to(devices)  # gl: was dtype=torch.float32
         pred_input_segment = torch.tensor(pred_segment_batch, dtype=torch.long).to(devices)
         target_input_segment = torch.tensor(target_segment_batch, dtype=torch.long).to(devices)
         if opt.bert_labels == 1:
@@ -339,15 +386,6 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         else:
             target_input_labels = torch.tensor(target_label_batch, dtype=torch.long).to(devices)
             pred_input_labels = torch.tensor(pred_label_batch, dtype=torch.long).to(devices)
-
-        # torch.save(pred_input_ids, 'prova/pred_input_ids.pt')  # gl saving tensors
-        # torch.save(pred_input_mask, 'prova/pred_input_mask.pt')  # gl saving tensors
-        # torch.save(pred_input_segment, 'prova/pred_input_segment.pt')  # gl saving tensors
-        # torch.save(pred_input_labels, 'prova/pred_input_label.pt')  # gl saving tensors
-        # torch.save(target_input_ids, 'prova/target_input_ids.pt')  # gl saving tensors
-        # torch.save(target_input_mask, 'prova/target_input_mask.pt')  # gl saving tensors
-        # torch.save(target_input_segment, 'prova/target_input_segment.pt')  # gl saving tensors
-        # torch.save(target_input_labels, 'prova/target_input_labels.pt')  # gl saving tensors
 
         # gl: 5. forward pass
         pred_output = D_model(pred_input_ids,
@@ -370,11 +408,11 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
             avg_fake = torch.mean(pred_output[1])
 
             for i, (target, prediction) in enumerate(zip(target_output[1], pred_output[1])):
-                # print('target = ' + str(target.item()) + '; prediction = ' + str(prediction.item()))
+                # print('target = ' + str(target.item()) + '; prediction = ' + str(prediction.item()))  # gl: debug
                 if target > 0.5 > prediction:
                     positives += 1
                     # print('positive!')
-
+            # print()  # gl: debug
         else:  # 2 classes classification
             # avg_real = torch.mean(target_output[1][:][:, 1])  # gl: media degli score della classe 1, ok se alta
             # avg_fake = torch.mean(pred_output[1][:][:, 0])  # gl: media degli score della classe 0, ok se alta
@@ -459,13 +497,6 @@ def main(opt):
                                              output_attentions=False,
                                              hidden_dropout_prob=0.1,
                                              )
-
-    # D_model = bert_model.model.from_pretrained('bert-base-uncased',  # gl: prova semplificata
-    #                                            num_labels=opt.bert_labels,
-    #                                            output_hidden_states=True,
-    #                                            output_attentions=True,
-    #                                            # hidden_dropout_prob=0.8,
-    #                                            )
 
     bert_tokenizer = bert_model.tokenizer
     # torch.save(bert_tokenizer.vocab, 'prova/vocab.pt')  # gl saving tensors
