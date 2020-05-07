@@ -33,7 +33,7 @@ torch.autograd.set_detect_anomaly(True)
 #########################################################
 def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name):
     src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, _, \
-    title, title_oov, title_lens, title_mask = one2many_batch
+        title, title_oov, title_lens, title_mask = one2many_batch
     one2many = opt.one2many
     one2many_mode = opt.one2many_mode
     if one2many and one2many_mode > 1:
@@ -70,7 +70,10 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
                                                 delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
                                                 src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
+    # print()  # gl: debug
+    # print()  # gl: debug
     # print(pred_str_2dlist)  # gl: debug
+    # print(trg_str_2dlist)  # gl: debug
     # target_str_2dlist = convert_list_to_kphs(trg)
     sample_time = time_since(start_time)
 
@@ -101,8 +104,10 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
                                                                                       title=title,
                                                                                       title_lens=title_lens,
                                                                                       title_mask=title_mask)
-            greedy_str_2dlist = sample_list_to_str_2dlist(greedy_sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
-                                                          delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
+            greedy_str_2dlist = sample_list_to_str_2dlist(greedy_sample_list, oov_lists, opt.idx2word, opt.vocab_size,
+                                                          eos_idx,
+                                                          delimiter_word, opt.word2idx[pykp.io.UNK_WORD],
+                                                          opt.replace_unk,
                                                           src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
             # print(greedy_str_2dlist)  # gl: debug
         generator.model.train()
@@ -114,8 +119,8 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
 
     # gl: new part, Bert Discriminator
     # print(src_str_list)  # gl: debug
-    pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt)
-    greedy_idx_list = build_kps_idx_list(greedy_str_2dlist, bert_tokenizer, opt)
+    pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt.separate_present_absent)
+    greedy_idx_list = build_kps_idx_list(greedy_str_2dlist, bert_tokenizer, opt.separate_present_absent)
     src_idx_list = build_src_idx_list(src_str_list, bert_tokenizer)
     # print(pred_idx_list)
     # print(greedy_idx_list)
@@ -143,10 +148,11 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
                          attention_mask=input_mask.unsqueeze(0),
                          token_type_ids=input_segment.unsqueeze(0),
                          )
-        # print(output[0])
+        # print(output[0].item())  # gl: debug
         pred_rewards[idx] = output[0]
     # torch.save(pred_rewards, 'prova/pred_rewards.pt')  # gl saving tensors
 
+    # print()  # gl: debug
     greedy_train_batch = torch.tensor(greedy_train_batch, dtype=torch.long).to(devices)
     greedy_mask_batch = torch.tensor(greedy_mask_batch, dtype=torch.long).to(devices)
     greedy_segment_batch = torch.tensor(greedy_segment_batch, dtype=torch.long).to(devices)
@@ -158,11 +164,12 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
                          attention_mask=input_mask.unsqueeze(0),
                          token_type_ids=input_segment.unsqueeze(0),
                          )
-        # print(output[0])
+        # print(output[0].item())  # gl: debug
         baseline_rewards[idx] = output[0]
     # torch.save(baseline_rewards, 'prova/baseline_rewards.pt')  # gl saving tensors
 
     cumulative_reward_sum = pred_rewards.sum(0)
+    # cumulative_bas_reward_sum = baseline_rewards.sum(0)
     batch_rewards = pred_rewards - baseline_rewards
     # torch.save(batch_rewards, 'prova/batch_rewards.pt')  # gl saving tensors
     # print('pred_rewards     :' + str(pred_rewards))
@@ -179,6 +186,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     # print('output_mask              :' + str(output_mask))
     # print('q_value_estimate         :' + str(q_value_estimate))
     print('cumulative_reward_sum    :' + str(cumulative_reward_sum))
+    # print('cumulative_bas_reward_sum:' + str(cumulative_bas_reward_sum))
     pg_loss = compute_pg_loss(log_selected_token_dist, output_mask, q_value_estimate)
     print('pg_loss                  :' + str(pg_loss.item()))
 
@@ -257,7 +265,8 @@ def main(opt):
     print("The Discriminator Description is ", D_model)
 
     # PG_optimizer = torch.optim.Adagrad(model.parameters(), opt.learning_rate_rl)  # gl: GAN code
-    PG_optimizer = torch.optim.Adam(params=filter(lambda p: p.requires_grad, model.parameters()), lr=opt.learning_rate_rl)  # gl: RL code
+    PG_optimizer = torch.optim.Adam(params=filter(lambda p: p.requires_grad, model.parameters()),
+                                    lr=opt.learning_rate_rl)  # gl: RL code
     if torch.cuda.is_available():
         D_model.load_state_dict(torch.load(opt.Discriminator_model_path))
         D_model = D_model.to(opt.gpuid)
