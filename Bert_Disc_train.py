@@ -150,12 +150,12 @@ def build_kps_idx_list(kps, bert_tokenizer, separate_present_absent):
         str_kps += '[SEP]'
         str_kps = str_kps.replace('[SEP] ;', '[SEP] ')
         str_kps = str_kps.replace(' ; ;', ' ;')
-        # print(str_kps)
+        # print(str_kps) # gl: debug
         bert_str_kps = bert_tokenizer.tokenize(str_kps)
         str_list.append(bert_str_kps)
         idx_list.append(bert_tokenizer.convert_tokens_to_ids(bert_str_kps))  # rivedere bene
-    # print(str_list)
-    # print(idx_list)
+    # print(str_list)  # gl: debug
+    # print(idx_list)  # gl: debug
 
     return idx_list
 
@@ -187,8 +187,8 @@ def build_src_idx_list(src_str_list, bert_tokenizer):
         bert_idx_src = bert_tokenizer.convert_tokens_to_ids(bert_str_src)
         str_list.append(bert_str_src)
         idx_list.append(bert_idx_src)  # rivedere bene
-    # print(str_list)
-    # print(idx_list)
+    # print(str_list)  # gl: debug
+    # print(idx_list)  # gl: debug
 
     return idx_list
 
@@ -236,8 +236,9 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         _, title, title_oov, title_lens, title_mask = one2many_batch
     # print('trg_str_2dlist')  # gl: debug
     # print(trg_str_2dlist)  # gl: debug
-    # print([len(d) for d in src_str_list])
-    # print()
+    # print([len(d) for d in src_str_list])  # gl: debug
+    # print(src_str_list)  # gl: debug
+    # print(trg_str_2dlist)  # gl: debug
     one2many = opt.one2many
     one2many_mode = opt.one2many_mode
     if one2many and one2many_mode > 1:
@@ -275,14 +276,10 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         src, src_lens, src_oov, src_mask, oov_lists, opt.max_length, greedy=False, one2many=one2many,
         one2many_mode=one2many_mode, num_predictions=num_predictions, perturb_std=perturb_std,
         entropy_regularize=entropy_regularize, title=title, title_lens=title_lens, title_mask=title_mask)
-
+    # print(sample_list[0]['prediction'])
     pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
                                                 delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
                                                 src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
-    # print()
-    # print(trg_str_2dlist)  # gl: debug
-    # print(pred_str_2dlist)  # gl: debug
-    # print(src_str_list)  # gl: debug
 
     # gl: 1. verificare se nelle 2 liste di KPs ce ne sono uguali ed eventualmente metterle all'inizio nello stesso ordine (così il Discriminator capisce che sono simili)
     # gl: alla fine G dovrebbe creare samples uguali a quelli veri ma non necessariamente nello steso ordine;
@@ -293,9 +290,13 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     #         print('same true and fake KPS at index=' + str(i))
 
     # gl: 2. Bert tokens indexes
+    # print()  # gl: debug
+    # print(pred_str_2dlist)  # gl: debug
     pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt.separate_present_absent)
     # target_idx_list = build_kps_idx_list(target_str_2dlist, bert_tokenizer, opt)
+    # print(trg_str_2dlist)  # gl: debug
     target_idx_list = build_kps_idx_list(trg_str_2dlist, bert_tokenizer, opt.separate_present_absent)
+    # print(src_str_list)  # gl: debug
     src_idx_list = build_src_idx_list(src_str_list, bert_tokenizer)
 
     # gl: 3. creare il batch di addestramento concatenando src sia con le fake che con le true KPs, limitando la lunghezza a 512 tokens e paddando
@@ -411,7 +412,10 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
                 # print('target = ' + str(target.item()) + '; prediction = ' + str(prediction.item()))  # gl: debug
                 if target > 0.5 > prediction:
                     positives += 1
-                    # print('positive!')
+                # if target > 0.5:
+                #     positives += 0.5
+                # if prediction < 0.5:
+                #     positives += 0.5
             # print()  # gl: debug
         else:  # 2 classes classification
             # avg_real = torch.mean(target_output[1][:][:, 1])  # gl: media degli score della classe 1, ok se alta
@@ -576,7 +580,7 @@ def main(opt):
                 valid_loss_total, valid_real_total, valid_fake_total, valid_positives_total = 0, 0, 0, 0
                 for batch_j, valid_batch in enumerate(valid_data_loader):
                     # print(batch_j)
-                    # torch.save(valid_batch, 'prova/valid_batch_error.pt')  # gl saving tensors
+                    # torch.save(valid_batch, 'prova/valid_batch_separated.pt')  # gl saving tensors
                     total += 1
                     valid_loss, valid_real, valid_fake, valid_positives = \
                         train_one_batch(D_model, valid_batch, generator, opt, perturb_std, bert_tokenizer,
