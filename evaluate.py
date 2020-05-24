@@ -14,6 +14,9 @@ from pykp.reward import sample_list_to_str_2dlist, compute_batch_reward
 from utils.statistics import LossStatistics, RewardStatistics
 from utils.string_helper import *
 from utils.time_log import time_since
+from BERT_Discriminator import NetModel, NetModelMC, NLP_MODELS
+from Bert_Disc_train import build_kps_idx_list, build_src_idx_list, build_training_batch
+import numpy as np
 
 
 # stemmer = PorterStemmer()
@@ -161,6 +164,96 @@ def evaluate_reward(data_loader, generator, opt):
             final_reward = compute_batch_reward(pred_str_2dlist, trg_str_2dlist, batch_size, reward_type, topk,
                                                 match_type, regularization_factor=0.0)  # np.array, [batch_size]
 
+            final_reward_sum += final_reward.sum(0)
+
+    eval_reward_stat = RewardStatistics(final_reward_sum, pg_loss=0, n_batch=n_batch, sample_time=sample_time_total)
+
+    return eval_reward_stat
+
+
+def evaluate_valid_reward(data_loader, generator, opt, D_model, bert_tokenizer):
+    """Return the avg. reward in the validation dataset"""
+    generator.model.eval()
+    final_reward_sum = 0.0
+    n_batch = 0
+    sample_time_total = 0.0
+    topk = opt.topk
+    reward_type = opt.reward_type
+    # reward_type = 7
+    match_type = opt.match_type
+    eos_idx = opt.word2idx[pykp.io.EOS_WORD]
+    delimiter_word = opt.delimiter_word
+    one2many = opt.one2many
+    one2many_mode = opt.one2many_mode
+    if one2many and one2many_mode > 1:
+        num_predictions = opt.num_predictions
+    else:
+        num_predictions = 1
+
+    with torch.no_grad():
+        for batch_i, batch in enumerate(data_loader):
+            # print('batch_i : ', batch_i)  # gl: debug
+            # load one2many dataset
+            src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, _, title, title_oov, title_lens, title_mask = batch
+            num_trgs = [len(trg_str_list) for trg_str_list in
+                        trg_str_2dlist]  # a list of num of targets in each batch, with len=batch_size
+
+            batch_size = src.size(0)
+            n_batch += batch_size
+
+            # move data to GPU if available
+            src = src.to(opt.device)
+            src_mask = src_mask.to(opt.device)
+            src_oov = src_oov.to(opt.device)
+            # trg = trg.to(opt.device)
+            # trg_mask = trg_mask.to(opt.device)
+            # trg_oov = trg_oov.to(opt.device)
+            if opt.title_guided:
+                title = title.to(opt.device)
+                title_mask = title_mask.to(opt.device)
+                # title_oov = title_oov.to(opt.device)
+
+            start_time = time.time()
+            # sample a sequence
+            # sample_list is a list of dict, {"prediction": [], "scores": [], "attention": [], "done": True}, preidiction is a list of 0 dim tensors
+            sample_list, log_selected_token_dist, output_mask, pred_idx_mask, _, _, _ = generator.sample(
+                src, src_lens, src_oov, src_mask, oov_lists, opt.max_length, greedy=True, one2many=one2many,
+                one2many_mode=one2many_mode, num_predictions=num_predictions, perturb_std=0, title=title,
+                title_lens=title_lens, title_mask=title_mask)
+            # pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx, delimiter_word)
+            pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
+                                                        delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
+                                                        src_str_list)
+            # print(pred_str_2dlist)
+            sample_time = time_since(start_time)
+            sample_time_total += sample_time
+
+            pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt.separate_present_absent)
+            src_idx_list = build_src_idx_list(src_str_list, bert_tokenizer)
+
+            pred_train_batch, pred_mask_batch, pred_segment_batch, _ = \
+                build_training_batch(src_idx_list, pred_idx_list, bert_tokenizer, opt, label=0)
+
+            # gl: only for seq. class; for multi choice add targets variables
+            pred_train_batch = torch.tensor(pred_train_batch, dtype=torch.long).to(opt.device)
+            pred_mask_batch = torch.tensor(pred_mask_batch, dtype=torch.long).to(opt.device)
+            pred_segment_batch = torch.tensor(pred_segment_batch, dtype=torch.long).to(opt.device)
+            final_reward = np.zeros(batch_size)
+            for idx, (input_ids, input_mask, input_segment) in enumerate(
+                    zip(pred_train_batch, pred_mask_batch, pred_segment_batch)):
+                # print(idx)
+                # print(input_ids)
+                # print(input_mask)
+                # print(input_segment)
+                output = D_model(input_ids.unsqueeze(0),
+                                 attention_mask=input_mask.unsqueeze(0),
+                                 token_type_ids=input_segment.unsqueeze(0),
+                                 )
+                # print(output[0].item())  # gl: debug
+                final_reward[idx] = output[0]
+
+            # final_reward = compute_batch_reward(pred_str_2dlist, trg_str_2dlist, batch_size, reward_type, topk,
+            #                                     match_type, regularization_factor=0.0)  # np.array, [batch_size]
             final_reward_sum += final_reward.sum(0)
 
     eval_reward_stat = RewardStatistics(final_reward_sum, pg_loss=0, n_batch=n_batch, sample_time=sample_time_total)
