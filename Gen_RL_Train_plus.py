@@ -6,12 +6,15 @@ Created on Mon Jul  1 15:10:45 2019
 """
 
 import math
+import sys
 
 # ############################### IMPORT LIBRARIES ###############################################################
 import pykp.io
 from pykp.reward import *
 from sequence_generator import SequenceGenerator
 from utils.statistics import RewardStatistics
+from evaluate import evaluate_valid_reward
+import torch.nn as nn
 
 EPS = 1e-8
 import logging
@@ -20,6 +23,8 @@ from pykp.model import Seq2SeqModel
 
 from utils.time_log import time_since
 from utils.data_loader import load_data_and_vocab
+from utils.report import export_train_and_valid_reward
+
 import time
 from BERT_Discriminator import NetModel, NetModelMC, NLP_MODELS
 from Bert_Disc_train import build_kps_idx_list, build_src_idx_list, build_training_batch
@@ -31,9 +36,9 @@ torch.autograd.set_detect_anomaly(True)
 
 # #  batch_reward_stat, log_selected_token_dist = train_one_batch(batch, generator, optimizer_rl, opt, perturb_std)
 #########################################################
-def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name):
+def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_tokenizer, optimizer):
     src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, _, \
-        title, title_oov, title_lens, title_mask = one2many_batch
+    title, title_oov, title_lens, title_mask = one2many_batch
     one2many = opt.one2many
     one2many_mode = opt.one2many_mode
     if one2many and one2many_mode > 1:
@@ -172,10 +177,6 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         baseline_rewards[idx] = output[0]
     # torch.save(baseline_rewards, 'prova/baseline_rewards.pt')  # gl saving tensors
 
-
-
-
-
     # pred = np.zeros(batch_size)
     # gred = np.zeros(batch_size)
     # for idx, (p_input_ids, p_input_mask, p_input_segment, g_input_ids, g_input_mask, g_input_segment) in enumerate(
@@ -201,10 +202,6 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     # print('baseline_rewards : ', baseline_rewards)
     # print('gred             : ', gred)
 
-
-
-
-
     cumulative_reward_sum = pred_rewards.sum(0)
     # cumulative_bas_reward_sum = baseline_rewards.sum(0)
     batch_rewards = pred_rewards - baseline_rewards
@@ -228,13 +225,31 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     pg_loss = compute_pg_loss(log_selected_token_dist, output_mask, q_value_estimate)
     print('pg_loss                  :' + str(pg_loss.item()))
 
-    stat = RewardStatistics(cumulative_reward_sum, pg_loss.item(), batch_size, sample_time, q_estimate_compute_time, 0)
+    # back propagation to compute the gradient
+    start_time = time.time()
+    pg_loss.backward()
+    backward_time = time_since(start_time)
 
-    # return stat, pg_loss
-    return pg_loss
+    if opt.max_grad_norm > 0:  # gl: 1
+        grad_norm_before_clipping = nn.utils.clip_grad_norm_(generator.model.parameters(), opt.max_grad_norm)
+
+    # take a step of gradient descent
+    optimizer.step()
+
+    stat = RewardStatistics(cumulative_reward_sum, pg_loss.item(), batch_size, sample_time, q_estimate_compute_time, backward_time)
+    # (final_reward=0.0, pg_loss=0.0, n_batch=0, sample_time=0, q_estimate_compute_time=0, backward_time=0)
+    # reward=0.0, pg_loss=0.0, n_batch=0, sample_time=0, q_estimate_compute_time=0, backward_time=0
+
+    return stat, log_selected_token_dist.detach()
+    # return pg_loss
 
 
 def main(opt):
+    total_batch = -1
+    early_stop_flag = False
+    num_stop_increasing = 0
+    best_valid_reward = float('-inf')
+
     # print("agsnf efnghrrqthg")
     # clip = 5
     report_train_reward_statistics = RewardStatistics()
@@ -317,13 +332,18 @@ def main(opt):
     print("Beginning with training Generator")
     print("########################################################################################################")
     total_epochs = opt.epochs
-    for epoch in range(total_epochs):
+    model.train()
 
-        total_batch = 0
+    for epoch in range(opt.start_epoch, opt.epochs+1):  # gl: 1, 20
+        if early_stop_flag:  # gl: False
+            break
+
+        # total_batch = 0
         print("Starting with epoch:", epoch)
         for batch_i, batch in enumerate(train_data_loader):
+            total_batch += 1
 
-            model.train()
+            # model.train()
             PG_optimizer.zero_grad()
 
             if perturb_decay_mode == 0:  # do not decay
@@ -334,21 +354,93 @@ def main(opt):
             elif perturb_decay_mode == 2:  # steps decay
                 perturb_std = init_perturb_std * math.pow(perturb_decay_factor, math.floor((1 + total_batch) / 4000))
 
-            # batch_reward_stat, avg_rewards = train_one_batch(D_model, batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name)
-            avg_rewards = train_one_batch(D_model, batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name)
-            # report_train_reward_statistics.update(batch_reward_stat)
-            # total_train_reward_statistics.update(batch_reward_stat)
+            batch_reward_stat, pg_loss = train_one_batch(D_model, batch, generator, opt, perturb_std, bert_tokenizer,
+                                                         PG_optimizer)
+            # pg_loss = train_one_batch(D_model, batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name)
+            report_train_reward_statistics.update(batch_reward_stat)
+            total_train_reward_statistics.update(batch_reward_stat)
 
-            if opt.max_grad_norm > 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), opt.max_grad_norm)
-            avg_rewards.backward()
-            PG_optimizer.step()
+            # if opt.max_grad_norm > 0:
+            #     torch.nn.utils.clip_grad_norm_(model.parameters(), opt.max_grad_norm)
+            # pg_loss.backward()
+            # PG_optimizer.step()
 
-            if batch_i % 4000 == 0:
-                print("Saving the file ...............----------->>>>>")
-                print("The avg reward is", -avg_rewards.item())
-                state_dfs = model.state_dict()
-                torch.save(state_dfs, "RL_Checkpoints/Attention_Generator_" + str(epoch) + ".pth.tar")
+            # if batch_i % 4000 == 0:
+            #     print("Saving the file ...............----------->>>>>")
+            #     print("The avg reward is", -avg_rewards.item())
+            #     state_dfs = model.state_dict()
+            #     torch.save(state_dfs, "RL_Checkpoints/Attention_Generator_" + str(epoch) + ".pth.tar")
+
+            # model.eval()
+
+            if total_batch % 20 == 0:
+                print("Epoch %d; batch: %d; total batch: %d" % (epoch, batch_i, total_batch))
+                sys.stdout.flush()
+
+            if epoch >= opt.start_checkpoint_at:
+                if (opt.checkpoint_interval == -1 and batch_i == len(train_data_loader) - 1) or \
+                        (
+                                opt.checkpoint_interval > -1 and total_batch > 1 and total_batch % opt.checkpoint_interval == 0):
+
+                    valid_reward_stat = evaluate_valid_reward(valid_data_loader, generator, opt, D_model,
+                                                              bert_tokenizer)
+                    model.train()
+                    current_valid_reward = valid_reward_stat.reward()
+                    print("Enter check point!")
+                    sys.stdout.flush()
+
+                    current_train_reward = report_train_reward_statistics.reward()
+                    current_train_pg_loss = report_train_reward_statistics.loss()
+
+                    if current_valid_reward > best_valid_reward:
+                        print("Valid reward increases")
+                        sys.stdout.flush()
+                        best_valid_reward = current_valid_reward
+                        num_stop_increasing = 0
+
+                        # check_pt_model_path = os.path.join(opt.model_path, '%s.epoch=%d.batch=%d.total_batch=%d' % (
+                        #     opt.exp, epoch, batch_i, total_batch) + '.model')
+                        model_folder = 'RL_Checkpoints'
+                        check_pt_model_path = os.path.join(model_folder, '%s.epoch=%d.batch=%d.total_batch=%d' % (
+                            opt.exp, epoch, batch_i, total_batch) + '.model')
+                        torch.save(  # save model parameters
+                            model.state_dict(),
+                            open(check_pt_model_path, 'wb')
+                        )
+                        logging.info('Saving checkpoint to %s' % check_pt_model_path)
+                    else:
+                        print("Valid reward does not increase")
+                        sys.stdout.flush()
+                        num_stop_increasing += 1
+                        # # decay the learning rate by the factor specified by opt.learning_rate_decay
+                        # if opt.learning_rate_decay_rl:
+                        #     for i, param_group in enumerate(optimizer_rl.param_groups):
+                        #         old_lr = float(param_group['lr'])
+                        #         new_lr = old_lr * opt.learning_rate_decay
+                        #         if old_lr - new_lr > EPS:
+                        #             param_group['lr'] = new_lr
+
+                    logging.info('Epoch: %d; batch idx: %d; total batches: %d' % (epoch, batch_i, total_batch))
+                    logging.info(
+                        'avg training reward: %.4f; avg training loss: %.4f; avg validation reward: %.4f; best validation reward: %.4f' % (
+                            current_train_reward, current_train_pg_loss, current_valid_reward, best_valid_reward))
+
+                    report_train_reward.append(current_train_reward)
+                    report_valid_reward.append(current_valid_reward)
+
+                    if not opt.disable_early_stop_rl:
+                        if num_stop_increasing >= opt.early_stop_tolerance:
+                            logging.info(
+                                'Have not increased for %d check points, early stop training' % num_stop_increasing)
+                            early_stop_flag = True
+                            break
+                    report_train_reward_statistics.clear()
+
+    # export the training curve
+    # train_valid_curve_path = opt.exp_path + '/train_valid_curve'
+    train_valid_curve_path = 'exp/train_valid_curve'
+    export_train_and_valid_reward(report_train_reward, report_valid_reward, opt.checkpoint_interval,
+                                  train_valid_curve_path)
 
     print()
     print("End of the Generator training")  # gl

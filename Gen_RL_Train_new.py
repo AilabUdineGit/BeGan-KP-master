@@ -79,6 +79,10 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
 
     # gl: new; log_selected_token_dist is related to eq. 1 in RL project paper
     max_pred_seq_len = log_selected_token_dist.size(1)
+    # print('perturb_std      :', perturb_std)  # gl: debug
+    # print('opt.max_length   :', opt.max_length)  # gl: debug
+    # print('num_predictions  :', num_predictions)  # gl: debug
+    print('max_pred_seq_len :', max_pred_seq_len)  # gl: debug
 
     if entropy_regularize:
         entropy_array = entropy.data.cpu().numpy()
@@ -168,6 +172,39 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         baseline_rewards[idx] = output[0]
     # torch.save(baseline_rewards, 'prova/baseline_rewards.pt')  # gl saving tensors
 
+
+
+
+
+    # pred = np.zeros(batch_size)
+    # gred = np.zeros(batch_size)
+    # for idx, (p_input_ids, p_input_mask, p_input_segment, g_input_ids, g_input_mask, g_input_segment) in enumerate(
+    #     zip(pred_train_batch, pred_mask_batch, pred_segment_batch, greedy_train_batch, greedy_mask_batch, greedy_segment_batch)
+    # ):
+    #
+    #     if (idx + 1) % 3 == 0:
+    #
+    #     output_p = D_model(p_input_ids.unsqueeze(0),
+    #                        attention_mask=p_input_mask.unsqueeze(0),
+    #                        token_type_ids=p_input_segment.unsqueeze(0),
+    #                        )
+    #     output_g = D_model(g_input_ids.unsqueeze(0),
+    #                        attention_mask=g_input_mask.unsqueeze(0),
+    #                        token_type_ids=g_input_segment.unsqueeze(0),
+    #                        )
+    #
+    #     pred[idx] = output_p[0]
+    #     gred[idx] = output_g[0]
+    #
+    # print('pred_rewards : ', pred_rewards)
+    # print('pred         : ', pred)
+    # print('baseline_rewards : ', baseline_rewards)
+    # print('gred             : ', gred)
+
+
+
+
+
     cumulative_reward_sum = pred_rewards.sum(0)
     # cumulative_bas_reward_sum = baseline_rewards.sum(0)
     batch_rewards = pred_rewards - baseline_rewards
@@ -185,6 +222,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     # print('log_selected_token_dist  :' + str(log_selected_token_dist))
     # print('output_mask              :' + str(output_mask))
     # print('q_value_estimate         :' + str(q_value_estimate))
+    # print('q_value_estimate_array   :', q_value_estimate_array)  # gl: debug
     print('cumulative_reward_sum    :' + str(cumulative_reward_sum))
     # print('cumulative_bas_reward_sum:' + str(cumulative_bas_reward_sum))
     pg_loss = compute_pg_loss(log_selected_token_dist, output_mask, q_value_estimate)
@@ -262,7 +300,7 @@ def main(opt):
 
     bert_tokenizer = bert_model.tokenizer
 
-    print("The Discriminator Description is ", D_model)
+    print("The Generator Description is ", model)
 
     # PG_optimizer = torch.optim.Adagrad(model.parameters(), opt.learning_rate_rl)  # gl: GAN code
     PG_optimizer = torch.optim.Adam(params=filter(lambda p: p.requires_grad, model.parameters()),
@@ -274,6 +312,10 @@ def main(opt):
         D_model.load_state_dict(torch.load(opt.Discriminator_model_path, map_location="cpu"))
 
     # D_model.load_state_dict(torch.load("Discriminator_checkpts/D_model_combined1.pth.tar"))
+
+    print()
+    print("Beginning with training Generator")
+    print("########################################################################################################")
     total_epochs = opt.epochs
     for epoch in range(total_epochs):
 
@@ -307,5 +349,8 @@ def main(opt):
                 print("The avg reward is", -avg_rewards.item())
                 state_dfs = model.state_dict()
                 torch.save(state_dfs, "RL_Checkpoints/Attention_Generator_" + str(epoch) + ".pth.tar")
+
+    print()
+    print("End of the Generator training")  # gl
 
 ######################################

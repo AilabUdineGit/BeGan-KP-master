@@ -18,6 +18,7 @@ from Disc_train import main as D_train
 from Bert_Disc_train import main as D_Bert_train
 # from Gen_RL_Train import main as G_train
 from Gen_RL_Train_new import main as G_train
+# from Gen_RL_Train_plus import main as G_train
 import torch
 import random
 import numpy as np
