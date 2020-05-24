@@ -5,49 +5,24 @@ Created on Mon Jul  1 15:10:45 2019
 @author: r17935avinash
 """
 
-# ############################### IMPORT LIBRARIES ###############################################################
-import torch
-import numpy as np
-import pykp.io
-import torch.nn as nn
-from utils.statistics import RewardStatistics
-from utils.time_log import time_since
-import time
-from sequence_generator import SequenceGenerator
-from utils.report import export_train_and_valid_loss, export_train_and_valid_reward
-import sys
-import logging
-import os
-from evaluate import evaluate_reward
-from pykp.reward import *
 import math
 
+# ############################### IMPORT LIBRARIES ###############################################################
+import pykp.io
+from pykp.reward import *
+from sequence_generator import SequenceGenerator
+from utils.statistics import RewardStatistics
+
 EPS = 1e-8
-import argparse
-import config
 import logging
-import os
-import json
-from pykp.io import KeyphraseDataset
-from pykp.model import Seq2SeqModel
-from torch.optim import Adam
 import pykp
 from pykp.model import Seq2SeqModel
-import train_ml
-import train_rl
-import numpy as np
 
 from utils.time_log import time_since
 from utils.data_loader import load_data_and_vocab
-from utils.string_helper import convert_list_to_kphs
 import time
-import numpy as np
-import random
-from torch import device
-from hierarchal_attention_Discriminator import Discriminator
-from torch.nn import functional as F
-from BERT_Discriminator import NetModel, NLPModel, NLP_MODELS
-from Bert_Disc_train import build_kps_idx_list,build_src_idx_list,build_training_batch
+from BERT_Discriminator import NetModel, NetModelMC, NLP_MODELS
+from Bert_Disc_train import build_kps_idx_list, build_src_idx_list, build_training_batch
 
 #####################################################################################################
 
@@ -56,10 +31,9 @@ torch.autograd.set_detect_anomaly(True)
 
 # #  batch_reward_stat, log_selected_token_dist = train_one_batch(batch, generator, optimizer_rl, opt, perturb_std)
 #########################################################
-
-
-def train_one_batch(D_model, one2many_batch, generator, opt, bert_tokenizer, perturb_std):
-    src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, _, title, title_oov, title_lens, title_mask, _, _, _, _,_ = one2many_batch
+def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name):
+    src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, _, \
+        title, title_oov, title_lens, title_mask = one2many_batch
     one2many = opt.one2many
     one2many_mode = opt.one2many_mode
     if one2many and one2many_mode > 1:
@@ -82,197 +56,191 @@ def train_one_batch(D_model, one2many_batch, generator, opt, bert_tokenizer, per
     baseline = opt.baseline
     match_type = opt.match_type
     regularization_type = opt.regularization_type  # # DNT
-    regularization_factor = opt.regularization_factor  # # DNT
+    regularization_factor = opt.regularization_factor  # #DNT
     if regularization_type == 2:
         entropy_regularize = True
     else:
         entropy_regularize = False
 
     start_time = time.time()
-    # print('title = ', title)
-    # print('title_lens = ', title_lens)
-    # print('title_mask = ', title_mask)
     sample_list, log_selected_token_dist, output_mask, pred_eos_idx_mask, entropy, location_of_eos_for_each_batch, location_of_peos_for_each_batch = generator.sample(
         src, src_lens, src_oov, src_mask, oov_lists, opt.max_length, greedy=False, one2many=one2many,
         one2many_mode=one2many_mode, num_predictions=num_predictions, perturb_std=perturb_std,
         entropy_regularize=entropy_regularize, title=title, title_lens=title_lens, title_mask=title_mask)
-    # opt.max_length=6; one2many=True; one2many_mode=1; num_predictions=1; perturb_std=0; entropy_regularize=False; title=None; title_lens=None; title_mask=None;
-
     pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
                                                 delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
                                                 src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
-    # print('pred_str_2dlist = ', pred_str_2dlist)
-    target_str_2dlist = convert_list_to_kphs(trg)
-    # print('target_str_2dlist = ', target_str_2dlist)
-    # print('src = ', src, src.size())
-    """
-     src = [batch_size,abstract_seq_len]
-     target_str_2dlist = list of list of true keyphrases
-     pred_str_2dlist = list of list of false keyphrases
+    # print()  # gl: debug
+    # print()  # gl: debug
+    # print(pred_str_2dlist)  # gl: debug
+    # print(trg_str_2dlist)  # gl: debug
+    # target_str_2dlist = convert_list_to_kphs(trg)
+    sample_time = time_since(start_time)
 
-    """
+    # gl: new; log_selected_token_dist is related to eq. 1 in RL project paper
+    max_pred_seq_len = log_selected_token_dist.size(1)
+    # print('perturb_std      :', perturb_std)  # gl: debug
+    # print('opt.max_length   :', opt.max_length)  # gl: debug
+    # print('num_predictions  :', num_predictions)  # gl: debug
+    print('max_pred_seq_len :', max_pred_seq_len)  # gl: debug
+
+    if entropy_regularize:
+        entropy_array = entropy.data.cpu().numpy()
+    else:
+        entropy_array = None
+
+    if opt.perturb_baseline:
+        baseline_perturb_std = perturb_std
+    else:
+        baseline_perturb_std = 0
+
+    # if use self critical as baseline, greedily decode a sequence from the model
+    if baseline == 'self':
+        generator.model.eval()
+        with torch.no_grad():
+            start_time = time.time()
+            greedy_sample_list, _, _, greedy_eos_idx_mask, _, _, _ = generator.sample(src, src_lens, src_oov, src_mask,
+                                                                                      oov_lists, opt.max_length,
+                                                                                      greedy=True, one2many=one2many,
+                                                                                      one2many_mode=one2many_mode,
+                                                                                      num_predictions=num_predictions,
+                                                                                      perturb_std=baseline_perturb_std,
+                                                                                      title=title,
+                                                                                      title_lens=title_lens,
+                                                                                      title_mask=title_mask)
+            greedy_str_2dlist = sample_list_to_str_2dlist(greedy_sample_list, oov_lists, opt.idx2word, opt.vocab_size,
+                                                          eos_idx,
+                                                          delimiter_word, opt.word2idx[pykp.io.UNK_WORD],
+                                                          opt.replace_unk,
+                                                          src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
+            # print(greedy_str_2dlist)  # gl: debug
+        generator.model.train()
+
     if torch.cuda.is_available():
         devices = opt.gpuid
     else:
         devices = "cpu"
 
-    total_abstract_loss = 0
-    batch_mine = 0
-    abstract_f = torch.Tensor([]).to(devices)
-    kph_f = torch.Tensor([]).to(devices)
-    h_kph_f_size = 0
-    len_list_t, len_list_f = [], []
+    # gl: new part, Bert Discriminator
+    # print(src_str_list)  # gl: debug
+    pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt.separate_present_absent)
+    greedy_idx_list = build_kps_idx_list(greedy_str_2dlist, bert_tokenizer, opt.separate_present_absent)
+    src_idx_list = build_src_idx_list(src_str_list, bert_tokenizer)
+    # print(pred_idx_list)
+    # print(greedy_idx_list)
+    # print(src_idx_list)
+    # torch.save(pred_idx_list, 'prova/pred_idx_list.pt')  # gl saving tensors
+    # torch.save(target_idx_list, 'prova/target_idx_list.pt')  # gl saving tensors
 
-    for idx, (src_list, pred_str_list, target_str_list) in enumerate(zip(src, pred_str_2dlist, target_str_2dlist)):
-        batch_mine += 1
-        if len(pred_str_list) == 0:
-            continue
+    pred_train_batch, pred_mask_batch, pred_segment_batch, _ = \
+        build_training_batch(src_idx_list, pred_idx_list, bert_tokenizer, opt, label=0)
+    greedy_train_batch, greedy_mask_batch, greedy_segment_batch, _ = \
+        build_training_batch(src_idx_list, greedy_idx_list, bert_tokenizer, opt, label=1)
 
-        pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt)
-        target_idx_list = build_kps_idx_list(target_str_2dlist, bert_tokenizer, opt)
-        src_idx_list = build_src_idx_list(src_str_list, bert_tokenizer)
-        # torch.save(pred_idx_list, 'prova/pred_idx_list.pt')  # gl saving tensors
-        # torch.save(target_idx_list, 'prova/target_idx_list.pt')  # gl saving tensors
+    # gl: only for seq. class; for multi choice add targets variables
+    pred_train_batch = torch.tensor(pred_train_batch, dtype=torch.long).to(devices)
+    pred_mask_batch = torch.tensor(pred_mask_batch, dtype=torch.long).to(devices)
+    pred_segment_batch = torch.tensor(pred_segment_batch, dtype=torch.long).to(devices)
+    pred_rewards = np.zeros(batch_size)
+    for idx, (input_ids, input_mask, input_segment) in enumerate(
+            zip(pred_train_batch, pred_mask_batch, pred_segment_batch)):
+        # print(idx)
+        # print(input_ids)
+        # print(input_mask)
+        # print(input_segment)
+        output = D_model(input_ids.unsqueeze(0),
+                         attention_mask=input_mask.unsqueeze(0),
+                         token_type_ids=input_segment.unsqueeze(0),
+                         )
+        # print(output[0].item())  # gl: debug
+        pred_rewards[idx] = output[0]
+    # torch.save(pred_rewards, 'prova/pred_rewards.pt')  # gl saving tensors
 
-        pred_train_batch, pred_mask_batch, pred_segment_batch, pred_label_batch = \
-            build_training_batch(src_idx_list, pred_idx_list, bert_tokenizer, opt, label=0)
-        target_train_batch, target_mask_batch, target_segment_batch, target_label_batch = \
-            build_training_batch(src_idx_list, target_idx_list, bert_tokenizer, opt, label=1)
+    # print()  # gl: debug
+    greedy_train_batch = torch.tensor(greedy_train_batch, dtype=torch.long).to(devices)
+    greedy_mask_batch = torch.tensor(greedy_mask_batch, dtype=torch.long).to(devices)
+    greedy_segment_batch = torch.tensor(greedy_segment_batch, dtype=torch.long).to(devices)
+    baseline_rewards = np.zeros(batch_size)
+    for idx, (input_ids, input_mask, input_segment) in enumerate(
+            zip(greedy_train_batch, greedy_mask_batch, greedy_segment_batch)):
+        # print(idx)
+        output = D_model(input_ids.unsqueeze(0),
+                         attention_mask=input_mask.unsqueeze(0),
+                         token_type_ids=input_segment.unsqueeze(0),
+                         )
+        # print(output[0].item())  # gl: debug
+        baseline_rewards[idx] = output[0]
+    # torch.save(baseline_rewards, 'prova/baseline_rewards.pt')  # gl saving tensors
 
-        # gl: 4. transform to torch.tensor
-        pred_input_ids = torch.tensor(pred_train_batch, dtype=torch.long).to(devices)
-        target_input_ids = torch.tensor(target_train_batch, dtype=torch.long).to(devices)
-        pred_input_mask = torch.tensor(pred_mask_batch, dtype=torch.float).to(devices)  # gl: was dtype=torch.float32
-        target_input_mask = torch.tensor(target_mask_batch, dtype=torch.float).to(
-            devices)  # gl: was dtype=torch.float32
-        pred_input_segment = torch.tensor(pred_segment_batch, dtype=torch.long).to(devices)
-        target_input_segment = torch.tensor(target_segment_batch, dtype=torch.long).to(devices)
-        pred_input_labels = torch.tensor(pred_label_batch, dtype=torch.long).to(devices)
-        target_input_labels = torch.tensor(target_label_batch, dtype=torch.long).to(devices)
 
-#        torch.save(pred_input_ids, 'prova/pred_input_ids.pt')
- #       torch.save(pred_input_mask, 'prova/pred_input_mask.pt')
- ##       torch.save(pred_input_labels, 'prova/pred_input_labels.pt')
- #       print('pred_input_ids.shape:     ' + str(pred_input_ids.shape))
-  #      print('pred_input_mask.shape:    ' + str(pred_input_mask.shape))
-  #      print('pred_input_segment.shape: ' + str(pred_input_segment.shape))
-   #     print('pred_input_labels.shape:  ' + str(pred_input_labels.shape))
-   #
-   #      print('pred_input_ids.shape:     ' + str(pred_input_ids[0,:512]))
-   #      print((pred_input_ids[1,:512] == 102).nonzero())
-   #      print('pred_input_mask.shape:    ' + str(pred_input_mask[0,:512]))
-   #      print('pred_input_segment.shape: ' + str(pred_input_segment[0,:512]))
-   #      print('pred_input_labels.shape:  ' + str(pred_input_labels.shape))
 
-        #f_output = D_model(pred_input_ids,
-         #                      attention_mask=pred_input_mask,
-         #                      token_type_ids=pred_input_segment,
-         #                      labels=pred_input_labels)
-        # torch.save(f_output,'prova/f_out.pt')
-        # print('f_output.shape'+str(len(f_output)))
-        # loss, logits =f_output[:2]
-        # print("loss",loss.shape)
-        # print("logits",logits[12][0])
-        # a = (pred_input_ids[:, :512] == 102).nonzero()
-        # #b = (pred_input_ids[1,:512] == 102).nonzero()
-        # print("a",a,a.shape)
-        # print(a[0,1].item())
-        # print(a[2,1].item())
-        # t1 = a[0,1].item()
-        # t2 = a[2, 1].item()
-        # #t1 = a[0, 0].item()
-        # #t2 = b[0, 0].item()
-        # h_abstract_f1 = logits[12][0, :t1, :780]
-        # h_kph_f1 = logits[12][0, t1:512, :780]
-        # h_abstract_f2 = logits[12][1, :t2, :780]
-        # h_kph_f2 = logits[12][1, t2:512, :780]
-        #
-        # h_kph_f_size1 = max(512-t1, 512-t2)
-        # h_abstract_f_size1 = max(t1, t2)
-        #
-        # h_abstract_f_size = h_abstract_f_size1
-        # h_kph_f_size = h_kph_f_size1
-        #
-        #
-        # print(h_abstract_f1.shape, type(h_abstract_f1))
-        # print(h_abstract_f2.shape, type(h_abstract_f2))
-        # print(h_kph_f1.shape)
-        # print(h_kph_f2.shape)
-        #print('pred_input_ids.shape:     ' + str(pred_input_ids.shape))
-        #print('pred_input_mask.shape:    ' + str(pred_input_mask.shape))
-        #print('pred_input_segment.shape: ' + str(pred_input_segment.shape))
-        #print('pred_input_labels.shape:  ' + str(pred_input_labels.shape))
-        h_abstract_f, h_kph_f = D_model.get_hidden_states(pred_input_ids,
-                                                        attention_mask = pred_input_mask,
-                                                        token_type_ids = pred_input_segment,
-                                                        labels = pred_input_labels)
-        #h_abstract_f=logits[12][:2,:505,:780]
-        #h_kph_f = logits[12][:2,506]
-        #h_abstract_f, h_kph_f = D_model.get_hidden_states(src_list, pred_str_list)
-        len_list_f.append(h_kph_f.size(1))
-        h_kph_f_size = max(h_kph_f_size, h_kph_f.size(1))
 
-    pred_str_new2dlist = []
-    log_selected_token_total_dist = torch.Tensor([]).to(devices)
-    for idx, (src_list, pred_str_list, target_str_list) in enumerate(zip(src, pred_str_2dlist, target_str_2dlist)):
-    #for idx in range(pred_input_ids.shape[0]):
-        batch_mine += 1
-        if len(target_str_list) == 0 or len(pred_str_list) == 0:
-            continue
-        pred_str_new2dlist.append(pred_str_list)
-        log_selected_token_total_dist = torch.cat((log_selected_token_total_dist, log_selected_token_dist[idx]), dim=0)
-        #h_abstract_f, h_kph_f = D_model.get_hidden_states(src_list, pred_str_list)
-        #f_output = D_model(pred_input_ids,
-         #                  attention_mask=pred_input_mask,
-          #                 token_type_ids=pred_input_segment,
-           #                labels=pred_input_labels)
 
-        h_abstract_f, h_kph_f = D_model.get_hidden_states(pred_input_ids,
-                                                          attention_mask=pred_input_mask,
-                                                          token_type_ids=pred_input_segment,
-                                                          labels=pred_input_labels)
-        p2d = (0, 0, 0, h_kph_f_size - h_kph_f.size(1))
-        h_kph_f = F.pad(h_kph_f, p2d)
-        #print("abstract_f", abstract_f.shape)
-        #print("h_abstract_f",h_abstract_f.shape)
-        abstract_f = h_abstract_f
-        kph_f = h_kph_f
-        #abstract_f = torch.cat((abstract_f, h_abstract_f), dim=0)
-        #kph_f = torch.cat((kph_f, h_kph_f), dim=0)
+    # pred = np.zeros(batch_size)
+    # gred = np.zeros(batch_size)
+    # for idx, (p_input_ids, p_input_mask, p_input_segment, g_input_ids, g_input_mask, g_input_segment) in enumerate(
+    #     zip(pred_train_batch, pred_mask_batch, pred_segment_batch, greedy_train_batch, greedy_mask_batch, greedy_segment_batch)
+    # ):
+    #
+    #     if (idx + 1) % 3 == 0:
+    #
+    #     output_p = D_model(p_input_ids.unsqueeze(0),
+    #                        attention_mask=p_input_mask.unsqueeze(0),
+    #                        token_type_ids=p_input_segment.unsqueeze(0),
+    #                        )
+    #     output_g = D_model(g_input_ids.unsqueeze(0),
+    #                        attention_mask=g_input_mask.unsqueeze(0),
+    #                        token_type_ids=g_input_segment.unsqueeze(0),
+    #                        )
+    #
+    #     pred[idx] = output_p[0]
+    #     gred[idx] = output_g[0]
+    #
+    # print('pred_rewards : ', pred_rewards)
+    # print('pred         : ', pred)
+    # print('baseline_rewards : ', baseline_rewards)
+    # print('gred             : ', gred)
 
-    # print('idx = ', idx)  # idx=31: è l'indice che cicla sul batch da 0 a 31
-    # print('abstract_f = ', abstract_f, abstract_f.size())  # torch.Size([32, 385, 150]) = [batch, max_length, hidden_dim]
-    # print('kph_f = ', kph_f, kph_f.size())  # torch.Size([32, 3, 150]) = [batch, padded_kp_length, hidden_dim]
-    # print('pred_str_new2dlist = ', pred_str_new2dlist)  # lista di liste, lista delle KP predette
-    opt.multiple_rewards = True  # gl: necessario perché sia single che multiple sono False in opt.
-    if opt.multiple_rewards:
-        len_abstract = abstract_f.size(1)
-        total_len = log_selected_token_dist.size(1)
-        log_selected_token_total_dist = log_selected_token_total_dist.reshape(-1, total_len)
-        all_rewards = D_model.calculate_rewards(abstract_f, kph_f, len_abstract, len_list_f, pred_str_new2dlist,
-                                                total_len)
-        all_rewards = all_rewards.reshape(-1, total_len)
-        calculated_rewards = log_selected_token_total_dist * all_rewards.detach()
-        individual_rewards = torch.sum(calculated_rewards, dim=1)
-        J = torch.mean(individual_rewards)
-        return J
 
-    elif opt.single_rewards:
-        len_abstract = abstract_f.size(1)
-        total_len = log_selected_token_dist.size(1)
-        log_selected_token_total_dist = log_selected_token_total_dist.reshape(-1, total_len)
-        all_rewards = D_model.calculate_rewards(abstract_f, kph_f, len_abstract, len_list_f, pred_str_new2dlist,
-                                                total_len)
-        calculated_rewards = all_rewards.detach() * log_selected_token_total_dist
-        individual_rewards = torch.sum(calculated_rewards, dim=1)
-        J = torch.mean(individual_rewards)
-        return J
 
+
+
+    cumulative_reward_sum = pred_rewards.sum(0)
+    # cumulative_bas_reward_sum = baseline_rewards.sum(0)
+    batch_rewards = pred_rewards - baseline_rewards
+    # torch.save(batch_rewards, 'prova/batch_rewards.pt')  # gl saving tensors
+    # print('pred_rewards     :' + str(pred_rewards))
+    # print('baseline_rewards :' + str(baseline_rewards))
+    # print('batch_rewards    :' + str(batch_rewards))
+    q_value_estimate_array = np.tile(batch_rewards.reshape([-1, 1]), [1, max_pred_seq_len])  # [batch, max_pred_seq_len]
+
+    q_value_estimate = torch.from_numpy(q_value_estimate_array).type(torch.FloatTensor).to(src.device)
+    q_value_estimate.requires_grad_(True)
+    q_estimate_compute_time = time_since(start_time)
+
+    # compute the policy gradient objective
+    # print('log_selected_token_dist  :' + str(log_selected_token_dist))
+    # print('output_mask              :' + str(output_mask))
+    # print('q_value_estimate         :' + str(q_value_estimate))
+    # print('q_value_estimate_array   :', q_value_estimate_array)  # gl: debug
+    print('cumulative_reward_sum    :' + str(cumulative_reward_sum))
+    # print('cumulative_bas_reward_sum:' + str(cumulative_bas_reward_sum))
+    pg_loss = compute_pg_loss(log_selected_token_dist, output_mask, q_value_estimate)
+    print('pg_loss                  :' + str(pg_loss.item()))
+
+    stat = RewardStatistics(cumulative_reward_sum, pg_loss.item(), batch_size, sample_time, q_estimate_compute_time, 0)
+
+    # return stat, pg_loss
+    return pg_loss
 
 
 def main(opt):
-    #print("agsnf efnghrrqthg")
-    clip = 5
+    # print("agsnf efnghrrqthg")
+    # clip = 5
+    report_train_reward_statistics = RewardStatistics()
+    total_train_reward_statistics = RewardStatistics()
+    report_train_reward = []
+    report_valid_reward = []
     start_time = time.time()
     train_data_loader, valid_data_loader, word2idx, idx2word, vocab = load_data_and_vocab(opt, load_train=True)
     load_data_time = time_since(start_time)
@@ -304,19 +272,39 @@ def main(opt):
     final_perturb_std = opt.final_perturb_std
     perturb_decay_factor = opt.perturb_decay_factor
     perturb_decay_mode = opt.perturb_decay_mode
-    hidden_dim = opt.D_hidden_dim
-    embedding_dim = opt.D_embedding_dim
-    n_layers = opt.D_layers
-
     # hidden_dim = opt.D_hidden_dim
     # embedding_dim = opt.D_embedding_dim
     # n_layers = opt.D_layers
-    #D_model = Discriminator(opt.vocab_size, embedding_dim, hidden_dim, n_layers, opt.word2idx[pykp.io.PAD_WORD],
-    #                       opt.gpuid)
+    #
+    # hidden_dim = opt.D_hidden_dim
+    # embedding_dim = opt.D_embedding_dim
+    # n_layers = opt.D_layers
+
     bert_model = NLP_MODELS[opt.bert_model].choose()  # gl
-    D_model = NetModel.from_pretrained(bert_model.pretrained_weights, num_labels=opt.bert_labels, output_hidden_states=True,hidden_dim = opt.D_hidden_dim, n_layers = opt.D_layers, device =opt.gpuid)
-    print("The Discriminator Description is ", D_model)
-    PG_optimizer = torch.optim.Adagrad(model.parameters(), opt.learning_rate_rl)
+    bert_model_name = bert_model.model.__class__.__name__
+    print(bert_model_name)
+
+    if bert_model_name == 'BertForSequenceClassification':
+        D_model = NetModel.from_pretrained(bert_model.pretrained_weights,
+                                           num_labels=opt.bert_labels,
+                                           output_hidden_states=True,
+                                           output_attentions=False,
+                                           hidden_dropout_prob=0.1,
+                                           )
+    elif bert_model_name == 'BertForMultipleChoice':
+        D_model = NetModelMC.from_pretrained(bert_model.pretrained_weights,
+                                             output_hidden_states=True,
+                                             output_attentions=False,
+                                             hidden_dropout_prob=0.1,
+                                             )
+
+    bert_tokenizer = bert_model.tokenizer
+
+    print("The Generator Description is ", model)
+
+    # PG_optimizer = torch.optim.Adagrad(model.parameters(), opt.learning_rate_rl)  # gl: GAN code
+    PG_optimizer = torch.optim.Adam(params=filter(lambda p: p.requires_grad, model.parameters()),
+                                    lr=opt.learning_rate_rl)  # gl: RL code
     if torch.cuda.is_available():
         D_model.load_state_dict(torch.load(opt.Discriminator_model_path))
         D_model = D_model.to(opt.gpuid)
@@ -324,8 +312,11 @@ def main(opt):
         D_model.load_state_dict(torch.load(opt.Discriminator_model_path, map_location="cpu"))
 
     # D_model.load_state_dict(torch.load("Discriminator_checkpts/D_model_combined1.pth.tar"))
+
+    print()
+    print("Beginning with training Generator")
+    print("########################################################################################################")
     total_epochs = opt.epochs
-    bert_tokenizer = bert_model.tokenizer
     for epoch in range(total_epochs):
 
         total_batch = 0
@@ -335,7 +326,6 @@ def main(opt):
             model.train()
             PG_optimizer.zero_grad()
 
-            # gl: poiché init_perturb_std = final_perturb_std = 0 => perturb_std = 0
             if perturb_decay_mode == 0:  # do not decay
                 perturb_std = init_perturb_std
             elif perturb_decay_mode == 1:  # exponential decay
@@ -343,10 +333,14 @@ def main(opt):
                     -1. * total_batch * perturb_decay_factor)
             elif perturb_decay_mode == 2:  # steps decay
                 perturb_std = init_perturb_std * math.pow(perturb_decay_factor, math.floor((1 + total_batch) / 4000))
-            #print('perturb_std = ', perturb_std)
-            #print('batch = ', len(batch))
-            avg_rewards = train_one_batch(D_model, batch, generator, opt, bert_tokenizer,perturb_std)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+
+            # batch_reward_stat, avg_rewards = train_one_batch(D_model, batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name)
+            avg_rewards = train_one_batch(D_model, batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name)
+            # report_train_reward_statistics.update(batch_reward_stat)
+            # total_train_reward_statistics.update(batch_reward_stat)
+
+            if opt.max_grad_norm > 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), opt.max_grad_norm)
             avg_rewards.backward()
             PG_optimizer.step()
 
@@ -355,5 +349,8 @@ def main(opt):
                 print("The avg reward is", -avg_rewards.item())
                 state_dfs = model.state_dict()
                 torch.save(state_dfs, "RL_Checkpoints/Attention_Generator_" + str(epoch) + ".pth.tar")
+
+    print()
+    print("End of the Generator training")  # gl
 
 ######################################
