@@ -37,7 +37,7 @@ class NetModel(BertPreTrainedModel):
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-        self.sigmoid = nn.Sigmoid()
+        # self.sigmoid = nn.Sigmoid()  # gl: normalizza l'output tra 0 e 1, forse non l'ideale per la reward
         # # self.devices = device
         # self.MegaRNN = nn.GRU(hidden_dim, 2 * hidden_dim, n_layers)
         # self.Linear = nn.Linear(2 * hidden_dim, 1)
@@ -92,7 +92,7 @@ class NetModel(BertPreTrainedModel):
         # logits = self.classifier(hidden_state)
 
         # gl: with sigmoid
-        logits = self.sigmoid(logits)
+        # logits = self.sigmoid(logits)  # gl: normalizza l'output tra 0 e 1, forse non l'ideale per la reward
 
         # # # gl: with tanh
         # logits = self.tanh(logits)
