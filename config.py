@@ -369,14 +369,14 @@ def train_opts(parser):
     parser.add_argument('-start_decay_at', type=int, default=8,
                         help="""Start decaying every epoch after and including this
                         epoch""")
-    parser.add_argument('-start_checkpoint_at', type=int, default=2,
+    parser.add_argument('-start_checkpoint_at', type=int, default=2,  # gl: was 2
                         help="""Start checkpointing every epoch after and including
                         this epoch""")
     parser.add_argument('-decay_method', type=str, default="",
                         choices=['noam'], help="Use a custom decay rate.")
     parser.add_argument('-warmup_steps', type=int, default=4000,
                         help="""Number of warmup steps for custom decay.""")
-    parser.add_argument('-checkpoint_interval', type=int, default=4000,
+    parser.add_argument('-checkpoint_interval', type=int, default=400,  # gl: was 4000
                         help='Run validation and save model parameters at this interval.')
     # parser.add_argument('-run_valid_every', type=int, default=4000,
     #                    help="Run validation test at this interval (every run_valid_every batches)")
