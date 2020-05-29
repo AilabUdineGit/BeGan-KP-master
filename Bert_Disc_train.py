@@ -119,6 +119,30 @@ from transformers import AdamW
 #     return idx_list
 
 
+def move_absent(kps_batch):
+    """
+    :param kps_batch: batch of kps
+    :return: a kps batch of the same shape of input, with each list of KPs rearranged with absent at the beginning
+    """
+    # print(kps_batch)
+    peos_kp = [pykp.io.PEOS_WORD]
+    kps_batch_rearranged = []
+    for idx, kps in enumerate(kps_batch):
+        separator = kps.index(peos_kp)
+        # print(separator)
+        absent = kps[separator+1:]
+        present = kps[:separator]
+        # print(kps)
+        # print(absent)
+        # print(present)
+        new = absent+present
+        # print(new)
+        kps_batch_rearranged.append(new)
+
+    # print(kps_batch_rearranged)
+    return kps_batch_rearranged
+
+
 def build_kps_idx_list(kps, bert_tokenizer, separate_present_absent):
     """
     evaluate the BERT tokenization for list of KPs
@@ -289,6 +313,9 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     #     if all(a in target_str_2dlist[i] for a in pred_str_2dlist[i]):
     #         print('same true and fake KPS at index=' + str(i))
 
+    # print(trg_str_2dlist)
+    trg_str_2dlist = move_absent(trg_str_2dlist)  # gl: change the order of present/absent kps in target file
+    # print(trg_str_2dlist)
     # gl: 2. Bert tokens indexes
     # print()  # gl: debug
     # print(pred_str_2dlist)  # gl: debug
