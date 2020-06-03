@@ -35,7 +35,7 @@ Be sure the option `-use_bert_discriminator` in config.py is set to True, then r
 ```terminal
 python3 GAN_Training.py  -data data/kp20k_separated/ -vocab data/kp20k_separated/ -exp_path exp/%s.%s -exp kp20k -epochs 5 -copy_attention -train_ml -one2many -one2many_mode 1 -batch_size 4 -model [MLE_model_path] -train_discriminator 
 ```
-As Bert models are verymemory consuming, `batch_size` depends much on the length of the input sequence: for `bert_max_length = 320` you will have `batch_size = 4`, for `bert_max_length = 384` you will have `batch_size = 3`.
+As Bert models are highly memory consuming, `batch_size` depends much on the length of the input sequence: for `bert_max_length = 320` you will have `batch_size = 4`, for `bert_max_length = 384` you will have `batch_size = 3`.
 
 ### Bert output
 A tuple of tensors is returned as output:
@@ -46,6 +46,10 @@ A tuple of tensors is returned as output:
 Currently used values are: `config.num_labels = 1` (regression), `batch_size = 4`, `sequence_length = 320`, `hidden_size = 768`.
 
 ## Generator
-We use CatSeq model as Generator
+For Generator we use CatSeq, an encoder-decoder model.
+To train the Generator run
+```terminal
+python3 GAN_Training.py  -data data/kp20k_separated/ -vocab data/kp20k_separated/ -exp_path exp/%s.%s -exp kp20k -epochs 20 -copy_attention -train_ml -one2many -one2many_mode 1 -batch_size 32 -model [model path] -train_rl -replace_unk -Discriminator_model_path [discriminator path] 
+```
 
 
