@@ -25,16 +25,17 @@ The final pattern is:
 ```terminal
 [CLS] <abstract> [SEP] <KP1> ; <KP2> ; ... ; <KPn> [SEP]
 ```
-where `[CLS]` is the special starting token, `[SEP]` is the special separation and ending token, `<abstract>` are the tokens of the abstract, `<KPi>` are those of the _i-th_ KP, and `;` separates different KPs. 
+where `[CLS]` is the special starting token, `[SEP]` is the special separation and ending token, `<abstract>` are the tokens of the abstract, `<KPi>` are those of the _i-th_ KP, and `;` separates different KPs.
+Total length of input sequence is cut to `bert_max_length = 320` or `bert_max_length = 384`
 
 ### Training of Discriminator
 During D training, for each abstract two input sequences as above are built: one with the real KPs, and one with the fake ones. Then the model is trained with both real and fake sequences, each with the appropriate label: 0 for fake, 1 for real.
 
 Be sure the option `-use_bert_discriminator` in config.py is set to True, then run
 ```terminal
-python3 GAN_Training.py  -data data/kp20k_sorted/ -vocab data/kp20k_sorted/ -exp_path exp/%s.%s -exp kp20k -epochs 5 -copy_attention -train_ml -one2many -one2many_mode 1 -batch_size 4 -model [MLE_model_path] -train_discriminator 
+python3 GAN_Training.py  -data data/kp20k_separated/ -vocab data/kp20k_separated/ -exp_path exp/%s.%s -exp kp20k -epochs 5 -copy_attention -train_ml -one2many -one2many_mode 1 -batch_size 4 -model [MLE_model_path] -train_discriminator 
 ```
-Consider a `batch_size = 4` as Bert models are very heavy.
+As Bert models are verymemory consuming, `batch_size` depends much on the length of the input sequence: for `bert_max_length = 320` you will have `batch_size = 4`, for `bert_max_length = 384` you will have `batch_size = 3`.
 
 ### Bert output
 A tuple of tensors is returned as output:
