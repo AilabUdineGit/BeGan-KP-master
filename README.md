@@ -1,6 +1,6 @@
 # Keyphrase GAN with Bert Discriminator
-We are implementing a GAN architecture to generate high-quality Keyphrases (KPs) from scientific abstracts. Our work relies much on <a href="https://github.com/avinsit123/keyphrase-gan">Keyphrase-GAN</a> wich, in turn, uses the Generator from <a href = "https://github.com/kenchan0226/keyphrase-generation-rl"> keyphrase-generation-rl </a> and <a href = "https://github.com/memray/seq2seq-keyphrase-pytorch"> seq2seq-keyphrase-pytorch </a> .
-Our contribution is the introduction of a Bert Discriminator.
+We are implementing a GAN architecture to generate high-quality Keyphrases (KPs) from scientific abstracts. Our work starts from <a href="https://github.com/avinsit123/keyphrase-gan">Keyphrase-GAN</a> wich, in turn, uses the Generator from <a href = "https://github.com/kenchan0226/keyphrase-generation-rl"> keyphrase-generation-rl </a> and <a href = "https://github.com/memray/seq2seq-keyphrase-pytorch"> seq2seq-keyphrase-pytorch </a> .
+We introduce a novel Bert Discriminator.
 
 Output of Discriminator is used to evaluate rewards for the Reinforcement Learning (RL) of the Generator.
 
