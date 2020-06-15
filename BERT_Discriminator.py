@@ -1,13 +1,9 @@
 import torch
-import torch.autograd as autograd
 import torch.nn as nn
-import numpy as np
-from transformers import AdamW, \
-    BertPreTrainedModel, BertModel, BertTokenizer, BertForTokenClassification, BertForMultipleChoice, BertForSequenceClassification, \
+from transformers import BertPreTrainedModel, BertModel, BertTokenizer, BertForSequenceClassification, \
     XLNetTokenizer, XLNetModel, RobertaModel, RobertaTokenizer, DistilBertModel, DistilBertTokenizer, \
-    AlbertTokenizer, AlbertModel
+    AlbertTokenizer, AlbertModel, AutoModel, AutoTokenizer, AutoModelForSequenceClassification
 # from params import PARAMS
-import torch.nn.functional as F
 
 
 class BertPooler(nn.Module):
@@ -327,7 +323,8 @@ NLP_MODELS = {  # models from transformers library
     'XLNet': NLPModel('XLNet', XLNetTokenizer, XLNetModel, "xlnet-large-uncased"),  # bert-base-cased
     'RoBERTa': NLPModel('Roberta', RobertaTokenizer, RobertaModel, "roberta-base"),
     'DistilBERT': NLPModel('DistilBERT', DistilBertTokenizer, DistilBertModel, 'distilbert-base-uncased'),
-    'AlBERT': NLPModel('AlBERT', AlbertTokenizer, AlbertModel, 'albert-xlarge')
+    'AlBERT': NLPModel('AlBERT', AlbertTokenizer, AlbertModel, 'albert-xlarge'),
+    'SpanBERT': NLPModel('SpanBERT', AutoTokenizer, AutoModelForSequenceClassification, 'SpanBERT/spanbert-base-cased')  # AutoModel, AutoModelForSequenceClassification
     # every supported model can be added
     # https://github.com/huggingface/transformers#model-architectures
     # Need to change util.generate_content_file and MAX_LENGHT because of different tokenization, and EMBEDDING_LENGHT
