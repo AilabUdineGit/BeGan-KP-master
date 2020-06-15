@@ -8,13 +8,14 @@ Created on Mon Jul  1 15:10:45 2019
 import math
 import sys
 
+import torch.nn as nn
+
 # ############################### IMPORT LIBRARIES ###############################################################
 import pykp.io
+from evaluate import evaluate_valid_reward
 from pykp.reward import *
 from sequence_generator import SequenceGenerator
 from utils.statistics import RewardStatistics
-from evaluate import evaluate_valid_reward
-import torch.nn as nn
 
 EPS = 1e-8
 import logging
@@ -22,7 +23,7 @@ import pykp
 from pykp.model import Seq2SeqModel
 
 from utils.time_log import time_since
-from utils.data_loader import load_data_and_vocab
+from utils.data_loader import load_data_and_vocab, load_sampled_data_and_vocab
 from utils.report import export_train_and_valid_reward
 
 import time
@@ -128,79 +129,48 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
 
     # gl: new part, Bert Discriminator
     # print(src_str_list)  # gl: debug
-    pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt.separate_present_absent)
-    greedy_idx_list = build_kps_idx_list(greedy_str_2dlist, bert_tokenizer, opt.separate_present_absent)
-    src_idx_list = build_src_idx_list(src_str_list, bert_tokenizer)
-    # print(pred_idx_list)
-    # print(greedy_idx_list)
-    # print(src_idx_list)
-    # torch.save(pred_idx_list, 'prova/pred_idx_list.pt')  # gl saving tensors
-    # torch.save(target_idx_list, 'prova/target_idx_list.pt')  # gl saving tensors
+    D_model.eval()
+    with torch.no_grad():
+        pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt.separate_present_absent)
+        greedy_idx_list = build_kps_idx_list(greedy_str_2dlist, bert_tokenizer, opt.separate_present_absent)
+        src_idx_list = build_src_idx_list(src_str_list, bert_tokenizer)
+        # print(pred_idx_list)
+        # print(greedy_idx_list)
+        # print(src_idx_list)
+        # torch.save(pred_idx_list, 'prova/pred_idx_list.pt')  # gl saving tensors
+        # torch.save(target_idx_list, 'prova/target_idx_list.pt')  # gl saving tensors
 
-    pred_train_batch, pred_mask_batch, pred_segment_batch, _ = \
-        build_training_batch(src_idx_list, pred_idx_list, bert_tokenizer, opt, label=0)
-    greedy_train_batch, greedy_mask_batch, greedy_segment_batch, _ = \
-        build_training_batch(src_idx_list, greedy_idx_list, bert_tokenizer, opt, label=1)
+        pred_train_batch, pred_mask_batch, pred_segment_batch, _ = \
+            build_training_batch(src_idx_list, pred_idx_list, bert_tokenizer, opt, label=0)
+        greedy_train_batch, greedy_mask_batch, greedy_segment_batch, _ = \
+            build_training_batch(src_idx_list, greedy_idx_list, bert_tokenizer, opt, label=1)
 
-    # gl: only for seq. class; for multi choice add targets variables
-    pred_train_batch = torch.tensor(pred_train_batch, dtype=torch.long).to(devices)
-    pred_mask_batch = torch.tensor(pred_mask_batch, dtype=torch.long).to(devices)
-    pred_segment_batch = torch.tensor(pred_segment_batch, dtype=torch.long).to(devices)
-    pred_rewards = np.zeros(batch_size)
-    for idx, (input_ids, input_mask, input_segment) in enumerate(
-            zip(pred_train_batch, pred_mask_batch, pred_segment_batch)):
-        # print(idx)
-        # print(input_ids)
-        # print(input_mask)
-        # print(input_segment)
-        output = D_model(input_ids.unsqueeze(0),
-                         attention_mask=input_mask.unsqueeze(0),
-                         token_type_ids=input_segment.unsqueeze(0),
-                         )
-        # print(output[0].item())  # gl: debug
-        pred_rewards[idx] = output[0]
-    # torch.save(pred_rewards, 'prova/pred_rewards.pt')  # gl saving tensors
+        # gl: only for seq. class; for multi choice add targets variables
+        pred_train_batch = torch.tensor(pred_train_batch, dtype=torch.long).to(devices)
+        pred_mask_batch = torch.tensor(pred_mask_batch, dtype=torch.long).to(devices)
+        pred_segment_batch = torch.tensor(pred_segment_batch, dtype=torch.long).to(devices)
+        pred_rewards = np.zeros(batch_size)
+        output_pre = D_model(pred_train_batch,
+                             attention_mask=pred_mask_batch,
+                             token_type_ids=pred_segment_batch,
+                             )
+        idx = 0
+        for val_p in output_pre[0]:
+            pred_rewards[idx] = val_p.item()
+            idx += 1
 
-    # print()  # gl: debug
-    greedy_train_batch = torch.tensor(greedy_train_batch, dtype=torch.long).to(devices)
-    greedy_mask_batch = torch.tensor(greedy_mask_batch, dtype=torch.long).to(devices)
-    greedy_segment_batch = torch.tensor(greedy_segment_batch, dtype=torch.long).to(devices)
-    baseline_rewards = np.zeros(batch_size)
-    for idx, (input_ids, input_mask, input_segment) in enumerate(
-            zip(greedy_train_batch, greedy_mask_batch, greedy_segment_batch)):
-        # print(idx)
-        output = D_model(input_ids.unsqueeze(0),
-                         attention_mask=input_mask.unsqueeze(0),
-                         token_type_ids=input_segment.unsqueeze(0),
-                         )
-        # print(output[0].item())  # gl: debug
-        baseline_rewards[idx] = output[0]
-    # torch.save(baseline_rewards, 'prova/baseline_rewards.pt')  # gl saving tensors
-
-    # pred = np.zeros(batch_size)
-    # gred = np.zeros(batch_size)
-    # for idx, (p_input_ids, p_input_mask, p_input_segment, g_input_ids, g_input_mask, g_input_segment) in enumerate(
-    #     zip(pred_train_batch, pred_mask_batch, pred_segment_batch, greedy_train_batch, greedy_mask_batch, greedy_segment_batch)
-    # ):
-    #
-    #     if (idx + 1) % 3 == 0:
-    #
-    #     output_p = D_model(p_input_ids.unsqueeze(0),
-    #                        attention_mask=p_input_mask.unsqueeze(0),
-    #                        token_type_ids=p_input_segment.unsqueeze(0),
-    #                        )
-    #     output_g = D_model(g_input_ids.unsqueeze(0),
-    #                        attention_mask=g_input_mask.unsqueeze(0),
-    #                        token_type_ids=g_input_segment.unsqueeze(0),
-    #                        )
-    #
-    #     pred[idx] = output_p[0]
-    #     gred[idx] = output_g[0]
-    #
-    # print('pred_rewards : ', pred_rewards)
-    # print('pred         : ', pred)
-    # print('baseline_rewards : ', baseline_rewards)
-    # print('gred             : ', gred)
+        greedy_train_batch = torch.tensor(greedy_train_batch, dtype=torch.long).to(devices)
+        greedy_mask_batch = torch.tensor(greedy_mask_batch, dtype=torch.long).to(devices)
+        greedy_segment_batch = torch.tensor(greedy_segment_batch, dtype=torch.long).to(devices)
+        baseline_rewards = np.zeros(batch_size)
+        output_bas = D_model(greedy_train_batch,
+                             attention_mask=greedy_mask_batch,
+                             token_type_ids=greedy_segment_batch,
+                             )
+        idx = 0
+        for val_b in output_bas[0]:
+            baseline_rewards[idx] = val_b.item()
+            idx += 1
 
     cumulative_reward_sum = pred_rewards.sum(0)
     # cumulative_bas_reward_sum = baseline_rewards.sum(0)
@@ -236,7 +206,8 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     # take a step of gradient descent
     optimizer.step()
 
-    stat = RewardStatistics(cumulative_reward_sum, pg_loss.item(), batch_size, sample_time, q_estimate_compute_time, backward_time)
+    stat = RewardStatistics(cumulative_reward_sum, pg_loss.item(), batch_size, sample_time, q_estimate_compute_time,
+                            backward_time)
     # (final_reward=0.0, pg_loss=0.0, n_batch=0, sample_time=0, q_estimate_compute_time=0, backward_time=0)
     # reward=0.0, pg_loss=0.0, n_batch=0, sample_time=0, q_estimate_compute_time=0, backward_time=0
 
@@ -257,7 +228,8 @@ def main(opt):
     report_train_reward = []
     report_valid_reward = []
     start_time = time.time()
-    train_data_loader, valid_data_loader, word2idx, idx2word, vocab = load_data_and_vocab(opt, load_train=True)
+    # train_data_loader, valid_data_loader, word2idx, idx2word, vocab = load_data_and_vocab(opt, load_train=True)
+    train_data_loader, valid_data_loader, word2idx, idx2word, vocab = load_sampled_data_and_vocab(opt, load_train=True, sampled=True)
     load_data_time = time_since(start_time)
     logging.info('Time for loading the data: %.1f' % load_data_time)
 
@@ -334,7 +306,7 @@ def main(opt):
     total_epochs = opt.epochs
     model.train()
 
-    for epoch in range(opt.start_epoch, opt.epochs+1):  # gl: 1, 20
+    for epoch in range(opt.start_epoch, opt.epochs + 1):  # gl: 1, 20
         if early_stop_flag:  # gl: False
             break
 

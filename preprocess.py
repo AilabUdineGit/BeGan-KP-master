@@ -4,6 +4,7 @@ import torch
 import pickle
 import pykp.io
 import config
+import random
 # from BERT_Discriminator import NetModel, NLPModel, NLP_MODELS  # gl
 
 
@@ -86,6 +87,26 @@ def read_tokenized_trg_file(path):
             trg_word_list = [trg.split(' ') for trg in trg_list]
             data.append(trg_word_list)
     return data
+
+
+def extract_samples_from_tokenized_pairs(tokenized_pairs, random_extract=False, sample_size=-1, seed=0):
+    """
+    gl: extract (randomly) the required number of samples from the tokenized pairs (src, trg)
+    :param tokenized_pairs: list of tuple
+    :param random_extract: if the samples are to be extracted randomly
+    :param sample_size: if -1 return the original datasets, else extract the required subsample
+    :param seed: seed of the random generation; if > 0 is for reproducibility
+    :return: sampled_tokenized_pairs, a list of tuples
+    """
+    if sample_size == -1:
+        sample_size = len(tokenized_pairs)
+    if random_extract:
+        if seed != 0:  # gl: put seed>0 for reproducibility
+            random.seed(seed)
+        sampled_tokenized_pairs = random.sample(tokenized_pairs, sample_size)
+    else:
+        sampled_tokenized_pairs = tokenized_pairs[:sample_size]
+    return sampled_tokenized_pairs
 
 
 def read_src_and_trg_files(src_file, trg_file, is_train, remove_eos=True, title_guided=False):
@@ -212,6 +233,11 @@ def main(opt):
     # simply concatenate src and target when building vocab
     word2idx, idx2word, token_freq_counter = build_vocab(tokenized_train_pairs, opt.include_peos)  # gl 344733 elementi
 
+    if opt.sample_size >= -1 and not title_guided:
+        tokenized_train_pairs = extract_samples_from_tokenized_pairs(tokenized_train_pairs,
+                                                                     random_extract=opt.random_extract,
+                                                                     sample_size=opt.sample_size)
+
     # building preprocessed training set for one2one training mode # gl: qui sotto avviene il troncamento ai primi 1001 elementi (siccome è one2one, in tot sono 4685
     train_one2one = pykp.io.build_dataset(tokenized_train_pairs, word2idx, idx2word, opt, mode='one2one',
                                           include_original=True, title_list=tokenized_train_title)
@@ -249,6 +275,11 @@ def main(opt):
         tokenized_valid_pairs = read_src_and_trg_files(opt.valid_src, opt.valid_trg, is_train=False, remove_eos=opt.remove_eos, title_guided=False)
         tokenized_valid_title = None
 
+    if opt.sample_size >= -1 and not title_guided:
+        tokenized_valid_pairs = extract_samples_from_tokenized_pairs(tokenized_valid_pairs,
+                                                                     random_extract=opt.random_extract,
+                                                                     sample_size=opt.sample_size)
+
     # building preprocessed validation set for one2one and one2many training mode
     valid_one2one = pykp.io.build_dataset(tokenized_valid_pairs, word2idx, idx2word, opt, mode='one2one',
                                           include_original=True, title_list=tokenized_valid_title)
@@ -277,6 +308,11 @@ def main(opt):
         tokenized_test_pairs = read_src_and_trg_files(opt.test_src, opt.test_trg, is_train=False,
                                                       remove_eos=opt.remove_eos, title_guided=False)
         tokenized_test_title = None
+
+    if opt.sample_size >= -1 and not title_guided:
+        tokenized_test_pairs = extract_samples_from_tokenized_pairs(tokenized_test_pairs,
+                                                                    random_extract=opt.random_extract,
+                                                                    sample_size=opt.sample_size)
 
     # building preprocessed test set for one2one and one2many training mode
     test_one2one = pykp.io.build_dataset(tokenized_test_pairs, word2idx, idx2word, opt, mode='one2one',
@@ -329,6 +365,7 @@ if __name__ == "__main__":
     parser.add_argument('-title_guided', action="store_true", help='Allow easy access to the title of the source text.')
 
     config.vocab_opts(parser)
+    # config.predict_opts(parser)  # gl: to load the seed
     # config.bert_opts(parser)  # gl
     # parser.add_argument('-vocab_size', default=50000, type=int, help='Max. number of words in vocab')
     # parser.add_argument('-max_unk_words', default=1000, type=int, help='Max. number of words in OOV vocab')

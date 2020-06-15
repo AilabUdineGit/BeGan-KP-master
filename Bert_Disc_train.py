@@ -28,7 +28,7 @@ import pykp
 from pykp.model import Seq2SeqModel
 
 from utils.time_log import time_since
-from utils.data_loader import load_data_and_vocab
+from utils.data_loader import load_data_and_vocab, load_sampled_data_and_vocab
 import time
 import random
 from BERT_Discriminator import NetModel, NetModelMC, NLP_MODELS
@@ -140,7 +140,30 @@ def move_absent(kps_batch):
         kps_batch_rearranged.append(new)
 
     # print(kps_batch_rearranged)
+    # print('move_absent!')
     return kps_batch_rearranged
+
+
+def remove_present(kps_batch):
+    """
+    :param kps_batch: batch of kps
+    :return: a kps batch of the same shape of input, with present KPs removed
+    """
+    # print(kps_batch)
+    peos_kp = [pykp.io.PEOS_WORD]
+    kps_batch_only_absent = []
+    for idx, kps in enumerate(kps_batch):
+        separator = kps.index(peos_kp)
+        # print(separator)
+        absent = kps[separator+1:]
+        # present = kps[:separator]
+        # print(kps)
+        # print(absent)
+        # print(present)
+        kps_batch_only_absent.append(absent)
+
+    # print('kps_batch_only_absent : ', kps_batch_only_absent)
+    return kps_batch_only_absent
 
 
 def build_kps_idx_list(kps, bert_tokenizer, separate_present_absent):
@@ -258,11 +281,9 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     #     _, title, title_oov, title_lens, title_mask, b_src, b_trg, b_src_str, b_trg_str, b_tok_map = one2many_batch # gl: old version with bert variables
     src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, \
         _, title, title_oov, title_lens, title_mask = one2many_batch
-    # print('trg_str_2dlist')  # gl: debug
-    # print(trg_str_2dlist)  # gl: debug
     # print([len(d) for d in src_str_list])  # gl: debug
-    # print(src_str_list)  # gl: debug
-    # print(trg_str_2dlist)  # gl: debug
+    # print('src_str_list   : ', src_str_list)  # gl: debug
+    # print('trg_str_2dlist : ', trg_str_2dlist)  # gl: debug
     one2many = opt.one2many
     one2many_mode = opt.one2many_mode
     if one2many and one2many_mode > 1:
@@ -314,16 +335,16 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     #         print('same true and fake KPS at index=' + str(i))
 
     # print(trg_str_2dlist)
-    trg_str_2dlist = move_absent(trg_str_2dlist)  # gl: change the order of present/absent kps in target file
-    # print(trg_str_2dlist)
+    if opt.absent_first:
+        trg_str_2dlist = move_absent(trg_str_2dlist)  # gl: change the order of present/absent kps in target file
+    if opt.only_absent:
+        trg_str_2dlist = remove_present(trg_str_2dlist)  # gl: change the order of present/absent kps in target file
+    # print('src_str_list    : ', src_str_list)
+    # print('trg_str_2dlist  : ', trg_str_2dlist)
     # gl: 2. Bert tokens indexes
-    # print()  # gl: debug
-    # print(pred_str_2dlist)  # gl: debug
+    # print('pred_str_2dlist : ', pred_str_2dlist)  # gl: debug
     pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt.separate_present_absent)
-    # target_idx_list = build_kps_idx_list(target_str_2dlist, bert_tokenizer, opt)
-    # print(trg_str_2dlist)  # gl: debug
     target_idx_list = build_kps_idx_list(trg_str_2dlist, bert_tokenizer, opt.separate_present_absent)
-    # print(src_str_list)  # gl: debug
     src_idx_list = build_src_idx_list(src_str_list, bert_tokenizer)
 
     # gl: 3. creare il batch di addestramento concatenando src sia con le fake che con le true KPs, limitando la lunghezza a 512 tokens e paddando
@@ -439,6 +460,9 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
                 # print('target = ' + str(target.item()) + '; prediction = ' + str(prediction.item()))  # gl: debug
                 if target > 0.5 > prediction:
                     positives += 1
+                #     print('target = ' + str(target.item()) + '; prediction = ' + str(prediction.item()) + '; 1')   # gl: debug
+                # else:
+                #     print('target = ' + str(target.item()) + '; prediction = ' + str(prediction.item()) + '; 0')  # gl: debug
                 # if target > 0.5:
                 #     positives += 0.5
                 # if prediction < 0.5:
@@ -474,10 +498,8 @@ def count_parameters(model):
 def main(opt):
     clip = 5
     start_time = time.time()
-    # opt.batch_size=150  # gl: used for debug of generated KPs in train_one_batch()
-    train_data_loader, valid_data_loader, word2idx, idx2word, vocab = load_data_and_vocab(opt, load_train=True)
-    # torch.save(train_data_loader, 'prova/train_data_loader.pt')  # gl
-    # torch.save(valid_data_loader, 'prova/valid_data_loader.pt')  # gl saving tensors
+    # train_data_loader, valid_data_loader, word2idx, idx2word, vocab = load_data_and_vocab(opt, load_train=True)  # gl: old
+    train_data_loader, valid_data_loader, word2idx, idx2word, vocab = load_sampled_data_and_vocab(opt, load_train=True, sampled=True)
     load_data_time = time_since(start_time)
     logging.info('Time for loading the data: %.1f' % load_data_time)
 
@@ -515,7 +537,7 @@ def main(opt):
     bert_model_name = bert_model.model.__class__.__name__
     print(bert_model_name)
 
-    if bert_model_name == 'BertForSequenceClassification':
+    if bert_model_name == 'BertForSequenceClassification' or bert_model_name == 'AutoModelForSequenceClassification':
         D_model = NetModel.from_pretrained(bert_model.pretrained_weights,
                                            num_labels=opt.bert_labels,
                                            output_hidden_states=True,
@@ -573,13 +595,17 @@ def main(opt):
     print("Beginning with training Discriminator")
     print("########################################################################################################")
     total_epochs = opt.epochs  # gl: was 5
+    best_valid_loss = 1000
+    total_batch = 0
+    num_stop_increasing = 0
+    early_stop = False
     for epoch in range(total_epochs):
-        total_batch = 0
+        # total_batch = 0
         print("Starting with epoch:", epoch)
         for batch_i, batch in enumerate(train_data_loader):
             # print('batch: ' + str(batch_i))  # gl: debug
             # torch.save(batch, 'prova/batch.pt')  # gl
-            best_valid_loss = 1000
+            # best_valid_loss = 1000
             D_model.train()
             D_optimizer.zero_grad()
 
@@ -597,51 +623,73 @@ def main(opt):
             avg_batch_loss.backward()
 
             D_optimizer.step()
-            D_model.eval()
+            # D_model.eval()
 
-            if batch_i % 4000 == 0:
-                print()
-                print('**********************************************************************')
-                print('validation:')
-                total = 0
-                valid_loss_total, valid_real_total, valid_fake_total, valid_positives_total = 0, 0, 0, 0
-                for batch_j, valid_batch in enumerate(valid_data_loader):
-                    # print(batch_j)
-                    # torch.save(valid_batch, 'prova/valid_batch_separated.pt')  # gl saving tensors
-                    total += 1
-                    valid_loss, valid_real, valid_fake, valid_positives = \
-                        train_one_batch(D_model, valid_batch, generator, opt, perturb_std, bert_tokenizer,
-                                        bert_model_name)
-                    valid_loss_total += valid_loss.cpu().detach().numpy()
-                    valid_real_total += valid_real.cpu().detach().numpy()
-                    valid_fake_total += valid_fake.cpu().detach().numpy()
-                    valid_positives_total += valid_positives.cpu().detach().numpy()
-                    # print(valid_positives_total)
-                    # print(valid_positives.item())
-                    D_optimizer.zero_grad()
+            if total_batch % 500 == 0 and total_batch > 0:
+            # if batch_i % 4000 == 0:
+                valid_start_time = time.time()
+                D_model.eval()
+                with torch.no_grad():
+                    print()
+                    print('**********************************************************************')
+                    print('validation:')
+                    total = 0
+                    valid_loss_total, valid_real_total, valid_fake_total, valid_positives_total = 0, 0, 0, 0
+                    for batch_j, valid_batch in enumerate(valid_data_loader):
+                        # print(batch_j)
+                        # torch.save(valid_batch, 'prova/valid_batch_separated.pt')  # gl saving tensors
+                        total += 1
+                        valid_loss, valid_real, valid_fake, valid_positives = \
+                            train_one_batch(D_model, valid_batch, generator, opt, perturb_std, bert_tokenizer,
+                                            bert_model_name)
+                        valid_loss_total += valid_loss.cpu().detach().numpy()
+                        valid_real_total += valid_real.cpu().detach().numpy()
+                        valid_fake_total += valid_fake.cpu().detach().numpy()
+                        valid_positives_total += valid_positives.cpu().detach().numpy()
+                        # print(valid_positives_total)
+                        # print(valid_positives.item())
+                        D_optimizer.zero_grad()
 
-                print("Currently loss is ", valid_loss_total.item() / total)
-                print("Currently real score is ", valid_real_total.item() / total)
-                print("Currently fake score is ", valid_fake_total.item() / total)
-                print("Currently accuracy is ", valid_positives_total.item() / len(valid_data_loader.dataset))
+                    print("Time elapsed for validation is ", time_since(valid_start_time))
+                    print("Currently loss is ", valid_loss_total.item() / total)
+                    print("Currently real score is ", valid_real_total.item() / total)
+                    print("Currently fake score is ", valid_fake_total.item() / total)
+                    # print("Currently accuracy is ", valid_positives_total.item() / len(valid_data_loader.dataset))  # old
+                    print("Currently accuracy is ", valid_positives_total.item() / len(valid_data_loader.sampler))
 
-                if best_valid_loss > valid_loss_total.item() / total:
-                    # print(best_valid_loss)
-                    print("Loss Decreases so saving the file ...............----------->>>>>")
-                    state_dfs = D_model.state_dict()
-                    torch.save(state_dfs, "Discriminator_checkpts/Bert_Discriminator_" + str(epoch) + ".pth.tar")
-                    best_valid_loss = valid_loss_total.item() / total
-                    # print(best_valid_loss)
-                else:  # gl
-                    print("Loss doesn't decrease so go on without saving the file")
+                    if best_valid_loss > valid_loss_total.item() / total:
+                        # print(best_valid_loss)
+                        print("Loss Decreases so saving the file ...............----------->>>>>")
+                        state_dfs = D_model.state_dict()
+                        # torch.save(state_dfs, "Discriminator_checkpts/Bert_Discriminator_" + str(epoch) + ".pth.tar")
+                        torch.save(state_dfs, "Discriminator_checkpts/Bert_Discriminator.epoch=" + str(epoch)
+                                   + ".batch=" + str(batch_i) + ".total_batch=" + str(total_batch)
+                                   + ".pth.tar")
+                        best_valid_loss = valid_loss_total.item() / total
+                        num_stop_increasing = 0
+                        # print(best_valid_loss)
+                    else:  # gl
+                        print("Loss doesn't decrease so go on without saving the file")
+                        num_stop_increasing += 1
+                        if num_stop_increasing >= opt.bert_early_stop_tolerance:
+                            print('Loss did not increase for %d check points, early stop training' % num_stop_increasing)
+                            early_stop = True
+                            # print('Discriminator training time: ', time_since(start_time))
+                            break
 
-                print('**********************************************************************')
-                print()
+                    print('**********************************************************************')
+                    print()
+
+            if early_stop:
+                break
 
             if batch_i % 100 == 0:  # gl
                 print('train batch: ' + str(batch_i) + '; loss: ' + str(avg_batch_loss.item()))
 
+            total_batch += 1
+
     print()
+    print('Discriminator training time: ', time_since(start_time))
     print("End of the Discriminator training")  # gl
 
 ######################################

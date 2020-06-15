@@ -6,43 +6,22 @@ Created on Mon Jul  1 15:10:45 2019
 @author: r17935avinash
 """
 
-# ############################### IMPORT LIBRARIES ###############################################################
-import torch
-import numpy as np
-import pykp.io
-import torch.nn as nn
-from utils.statistics import RewardStatistics
-from utils.time_log import time_since
-import time
-from sequence_generator import SequenceGenerator
-from utils.report import export_train_and_valid_loss, export_train_and_valid_reward
-import sys
-import logging
-import os
-from evaluate import evaluate_reward
-from pykp.reward import *
 import math
+
+# ############################### IMPORT LIBRARIES ###############################################################
+import pykp.io
+from pykp.reward import *
+from sequence_generator import SequenceGenerator
+
 EPS = 1e-8
-import argparse
-import config
 import logging
-import os
-import json
-from pykp.io import KeyphraseDataset
-from pykp.model import Seq2SeqModel
-from torch.optim import Adam
 import pykp
 from pykp.model import Seq2SeqModel
-import train_ml
-import train_rl
 
 from utils.time_log import time_since
 from utils.data_loader import load_data_and_vocab
 from utils.string_helper import convert_list_to_kphs
 import time
-import numpy as np
-import random
-from torch import device 
 from hierarchal_attention_Discriminator import Discriminator
 from torch.nn import functional as F
 # ####################################################################################################
