@@ -185,8 +185,15 @@ def vocab_opts(parser):
     parser.add_argument('-dynamic_dict', default=True,
                         action='store_true', help="Create dynamic dictionaries (for copy)")
 
-    parser.add_argument('-sample_size', type=int, default=1000,
-                        help="Max number of samples to preprocess")
+    parser.add_argument('-sample_size', type=int, default=2000,
+                        help="Max number of samples to preprocess (-1 for the whole dataset)")
+
+    parser.add_argument('-random_extract', default=True,
+                        action='store_true', help="Samples are randomly extracted from datasets")
+
+    # parser.add_argument('-seed', type=int, default=9527,
+    #                     help="""Random seed used for the experiments
+    #                     reproducibility. Put 0 if not to be used""")
 
 
 def train_opts(parser):
@@ -219,7 +226,7 @@ def train_opts(parser):
                         help="Use CUDA on the selected device.")
     # parser.add_argument('-gpuid', default=[0], nargs='+', type=int,
     #                    help="Use CUDA on the listed devices.")
-    parser.add_argument('-seed', type=int, default=9527,
+    parser.add_argument('-seed', type=int, default=9527,  # gl: was 9527; put 0 for non-reproducibility
                         help="""Random seed used for the experiments
                         reproducibility. Put 0 if not to be used""")
 
@@ -417,6 +424,11 @@ def train_opts(parser):
                         help='Maximum sentence length.')
     '''
 
+    parser.add_argument('-absent_first', action="store_true", default=False,
+                        help='Absent KPs are moved at the beginning of target samples (Discriminator training)')
+    parser.add_argument('-only_absent', action="store_true", default=False,
+                        help='Present KPs are removed from target samples, training is performed using only absent KPs')
+
 
 def predict_opts(parser):
     parser.add_argument('-model', required=True,
@@ -565,8 +577,7 @@ def interactive_predict_opts(parser):
     # parser.add_argument('-trg_file', required=True,
     #                    help="""Path to target file""")
     parser.add_argument('-vocab', required=True,
-                        help="""Path prefix to the "vocab.pt"
-                            file path from preprocess.py""")
+                        help="""Path prefix to the "vocab.pt" file path from preprocess.py""")
     parser.add_argument('-custom_vocab_filename_suffix', action="store_true",
                         help='')
     parser.add_argument('-vocab_filename_suffix', default='',
@@ -578,8 +589,7 @@ def interactive_predict_opts(parser):
     parser.add_argument('-max_length', type=int, default=60,
                         help='Maximum prediction length.')
     parser.add_argument('-length_penalty_factor', type=float, default=0.,
-                        help="""Google NMT length penalty parameter
-                            (higher = longer generation)""")
+                        help="""Google NMT length penalty parameter (higher = longer generation)""")
     parser.add_argument('-coverage_penalty_factor', type=float, default=-0.,
                         help="""Coverage penalty parameter""")
     parser.add_argument('-length_penalty', default='none', choices=['none', 'wu', 'avg'],
@@ -589,8 +599,7 @@ def interactive_predict_opts(parser):
     parser.add_argument('-gpuid', default=0, type=int,
                         help="Use CUDA on the selected device.")
     parser.add_argument('-seed', type=int, default=9527,
-                        help="""Random seed used for the experiments
-                            reproducibility.""")
+                        help="""Random seed used for the experiments reproducibility.""")
     parser.add_argument('-batch_size', type=int, default=8,
                         help='Maximum batch size')
     parser.add_argument('-batch_workers', type=int, default=1,
@@ -638,12 +647,16 @@ def interactive_predict_opts(parser):
 
 def bert_opts(parser):  # gl
     parser.add_argument('-bert_model', type=str, default='BERT',
-                        help='Model from HuggingFace transformers (BERT, ALBERT, ... )')
+                        help='Model from HuggingFace transformers (BERT, SpanBERT, ... )')
     parser.add_argument('-bert_labels', type=int, default=1,  # gl: only affects sequence classification, 1 is for regression
-                        help='Labels for discriminator classification (2 almost always)')
+                        help='Labels for discriminator classification: 1 for regression, 2 for classification')
     parser.add_argument('-bert_learning_rate', type=float, default=0.00002,  # gl: was 0.00004, then 0.00002
                         help='Learning rate for AdamW optimizer')
     parser.add_argument('-bert_max_length', type=int, default=384,  # gl: 256 batch_size=5?; 320 batch_size=4; 384 batch_size=3; 512 batch_size=2
                         help='Max length of Bert input')
     parser.add_argument('-use_bert_discriminator', action="store_true", default=True,
                         help='If is to use bert discriminator')
+    parser.add_argument('-bert_validation_batch_size', type=int, default=64,  # gl: was 32
+                        help='Batch size to use during validation')
+    parser.add_argument('-bert_early_stop_tolerance', type=int, default=2,
+                        help="Stop training if it doesn't improve any more for several rounds of validation")
