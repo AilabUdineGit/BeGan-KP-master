@@ -190,6 +190,7 @@ def evaluate_valid_reward(data_loader, generator, opt, D_model, bert_tokenizer):
     else:
         num_predictions = 1
 
+    D_model.eval()
     with torch.no_grad():
         for batch_i, batch in enumerate(data_loader):
             # print('batch_i : ', batch_i)  # gl: debug
@@ -238,19 +239,25 @@ def evaluate_valid_reward(data_loader, generator, opt, D_model, bert_tokenizer):
             pred_train_batch = torch.tensor(pred_train_batch, dtype=torch.long).to(opt.device)
             pred_mask_batch = torch.tensor(pred_mask_batch, dtype=torch.long).to(opt.device)
             pred_segment_batch = torch.tensor(pred_segment_batch, dtype=torch.long).to(opt.device)
-            final_reward = np.zeros(batch_size)
-            for idx, (input_ids, input_mask, input_segment) in enumerate(
-                    zip(pred_train_batch, pred_mask_batch, pred_segment_batch)):
-                # print(idx)
-                # print(input_ids)
-                # print(input_mask)
-                # print(input_segment)
-                output = D_model(input_ids.unsqueeze(0),
-                                 attention_mask=input_mask.unsqueeze(0),
-                                 token_type_ids=input_segment.unsqueeze(0),
-                                 )
-                # print(output[0].item())  # gl: debug
-                final_reward[idx] = output[0]
+            # final_reward = np.zeros(batch_size)
+            # for idx, (input_ids, input_mask, input_segment) in enumerate(
+            #         zip(pred_train_batch, pred_mask_batch, pred_segment_batch)):
+            #     # print(idx)
+            #     # print(input_ids)
+            #     # print(input_mask)
+            #     # print(input_segment)
+            #     output = D_model(input_ids.unsqueeze(0),
+            #                      attention_mask=input_mask.unsqueeze(0),
+            #                      token_type_ids=input_segment.unsqueeze(0),
+            #                      )
+            #     # print(output[0].item())  # gl: debug
+            #     final_reward[idx] = output[0]
+
+            output = D_model(pred_train_batch,
+                             attention_mask=pred_mask_batch,
+                             token_type_ids=pred_segment_batch,
+                             )
+            final_reward = output[0]
 
             # final_reward = compute_batch_reward(pred_str_2dlist, trg_str_2dlist, batch_size, reward_type, topk,
             #                                     match_type, regularization_factor=0.0)  # np.array, [batch_size]
