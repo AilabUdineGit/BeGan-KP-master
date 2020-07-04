@@ -3,10 +3,12 @@ import os
 import sys
 import time
 
+import numpy as np
 import torch
 
 # from nltk.stem.porter import *
 import pykp
+from Bert_Disc_train import build_kps_idx_list, build_src_idx_list, build_training_batch, shuffle_input_samples
 # from utils import Progbar
 # from pykp.metric.bleu import bleu
 from pykp.masked_loss import masked_cross_entropy
@@ -14,9 +16,6 @@ from pykp.reward import sample_list_to_str_2dlist, compute_batch_reward
 from utils.statistics import LossStatistics, RewardStatistics
 from utils.string_helper import *
 from utils.time_log import time_since
-from BERT_Discriminator import NetModel, NetModelMC, NLP_MODELS
-from Bert_Disc_train import build_kps_idx_list, build_src_idx_list, build_training_batch
-import numpy as np
 
 
 # stemmer = PorterStemmer()
@@ -171,7 +170,37 @@ def evaluate_reward(data_loader, generator, opt):
     return eval_reward_stat
 
 
-def evaluate_valid_reward(data_loader, generator, opt, D_model, bert_tokenizer):
+def reward_function(discriminator_output, batch_size, bert_model_name, labels=None):
+    """
+    Reward to use with BertForMultipleChoice
+    :param: discriminator_output, pytorch tensor, the output of Discriminator
+    :param: batch_size, int
+    :param: bert_model_name, str, specific Bert model for Discriminator
+    :param: labels, list of integer
+    :return: numpy array of floats, the reward
+    """
+    rewards = np.zeros(batch_size)
+    idx = 0
+    for val_b in discriminator_output:
+        if bert_model_name == 'BertForSequenceClassification':
+            rewards[idx] = val_b.item()
+        elif bert_model_name == 'BertForMultipleChoice':
+            # rewards[idx] = 1 - (val_b[0].item() - val_b[1].item()) ** 2
+            if labels:
+                rewards[idx] = 1 - abs((val_b[0].item() - val_b[1].item()) / val_b[labels[idx]].item())
+                # print('val_b[0]     : ', val_b[0].item())
+                # print('val_b[1]     : ', val_b[1].item())
+                # print('rewards[idx] : ', rewards[idx])
+                # print('labels[idx]  : ', labels[idx])
+                # print()
+            else:
+                rewards[idx] = 1 - abs(val_b[0].item() - val_b[1].item())
+        idx += 1
+
+    return rewards
+
+
+def evaluate_valid_reward(data_loader, generator, opt, D_model, bert_tokenizer, bert_model_name):
     """Return the avg. reward in the validation dataset"""
     generator.model.eval()
     final_reward_sum = 0.0
@@ -196,8 +225,8 @@ def evaluate_valid_reward(data_loader, generator, opt, D_model, bert_tokenizer):
             # print('batch_i : ', batch_i)  # gl: debug
             # load one2many dataset
             src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, _, title, title_oov, title_lens, title_mask = batch
-            num_trgs = [len(trg_str_list) for trg_str_list in
-                        trg_str_2dlist]  # a list of num of targets in each batch, with len=batch_size
+            # num_trgs = [len(trg_str_list) for trg_str_list in
+            #             trg_str_2dlist]  # a list of num of targets in each batch, with len=batch_size
 
             batch_size = src.size(0)
             n_batch += batch_size
@@ -221,7 +250,6 @@ def evaluate_valid_reward(data_loader, generator, opt, D_model, bert_tokenizer):
                 src, src_lens, src_oov, src_mask, oov_lists, opt.max_length, greedy=True, one2many=one2many,
                 one2many_mode=one2many_mode, num_predictions=num_predictions, perturb_std=0, title=title,
                 title_lens=title_lens, title_mask=title_mask)
-            # pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx, delimiter_word)
             pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
                                                         delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
                                                         src_str_list)
@@ -235,33 +263,48 @@ def evaluate_valid_reward(data_loader, generator, opt, D_model, bert_tokenizer):
             pred_train_batch, pred_mask_batch, pred_segment_batch, _ = \
                 build_training_batch(src_idx_list, pred_idx_list, bert_tokenizer, opt, label=0)
 
-            # gl: only for seq. class; for multi choice add targets variables
-            pred_train_batch = torch.tensor(pred_train_batch, dtype=torch.long).to(opt.device)
-            pred_mask_batch = torch.tensor(pred_mask_batch, dtype=torch.long).to(opt.device)
-            pred_segment_batch = torch.tensor(pred_segment_batch, dtype=torch.long).to(opt.device)
-            # final_reward = np.zeros(batch_size)
-            # for idx, (input_ids, input_mask, input_segment) in enumerate(
-            #         zip(pred_train_batch, pred_mask_batch, pred_segment_batch)):
-            #     # print(idx)
-            #     # print(input_ids)
-            #     # print(input_mask)
-            #     # print(input_segment)
-            #     output = D_model(input_ids.unsqueeze(0),
-            #                      attention_mask=input_mask.unsqueeze(0),
-            #                      token_type_ids=input_segment.unsqueeze(0),
-            #                      )
-            #     # print(output[0].item())  # gl: debug
-            #     final_reward[idx] = output[0]
+            if bert_model_name == 'BertForSequenceClassification':
+                pred_train_batch = torch.tensor(pred_train_batch, dtype=torch.long).to(opt.device)
+                pred_mask_batch = torch.tensor(pred_mask_batch, dtype=torch.long).to(opt.device)
+                pred_segment_batch = torch.tensor(pred_segment_batch, dtype=torch.long).to(opt.device)
+
+                # # final_reward = np.zeros(batch_size)
+                # output = D_model(pred_train_batch,
+                #                  attention_mask=pred_mask_batch,
+                #                  token_type_ids=pred_segment_batch,
+                #                  )
+                # # idx = 0
+                # # for val_p in output[0]:
+                # #     final_reward[idx] = val_p.item()
+                # #     idx += 1
+                # final_reward = reward_function(output[0], batch_size, bert_model_name)
+
+            elif bert_model_name == 'BertForMultipleChoice':
+                trg_idx_list = build_kps_idx_list(trg_str_2dlist, bert_tokenizer, opt.separate_present_absent)
+
+                trg_train_batch, trg_mask_batch, trg_segment_batch, _ = \
+                    build_training_batch(src_idx_list, trg_idx_list, bert_tokenizer, opt, label=0)
+
+                pred_train_batch, pred_mask_batch, pred_segment_batch, labels = \
+                    shuffle_input_samples(batch_size, pred_train_batch, trg_train_batch,
+                                          pred_mask_batch, trg_mask_batch,
+                                          pred_segment_batch, trg_segment_batch)
+
+                pred_train_batch = torch.tensor(pred_train_batch, dtype=torch.long).to(opt.device)
+                pred_mask_batch = torch.tensor(pred_mask_batch, dtype=torch.long).to(opt.device)
+                pred_segment_batch = torch.tensor(pred_segment_batch, dtype=torch.long).to(opt.device)
 
             output = D_model(pred_train_batch,
                              attention_mask=pred_mask_batch,
                              token_type_ids=pred_segment_batch,
                              )
-            final_reward = output[0]
+            final_reward = reward_function(output[0], batch_size, bert_model_name, labels)
 
             # final_reward = compute_batch_reward(pred_str_2dlist, trg_str_2dlist, batch_size, reward_type, topk,
             #                                     match_type, regularization_factor=0.0)  # np.array, [batch_size]
             final_reward_sum += final_reward.sum(0)
+            # print('(validation) final_reward     : ', final_reward)
+            # print('(validation) final_reward_sum : ', final_reward_sum)
 
     eval_reward_stat = RewardStatistics(final_reward_sum, pg_loss=0, n_batch=n_batch, sample_time=sample_time_total)
 
