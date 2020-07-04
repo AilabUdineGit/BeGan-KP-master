@@ -12,7 +12,7 @@ import torch.nn as nn
 
 # ############################### IMPORT LIBRARIES ###############################################################
 import pykp.io
-from evaluate import evaluate_valid_reward
+from evaluate import evaluate_valid_reward, reward_function
 from pykp.reward import *
 from sequence_generator import SequenceGenerator
 from utils.statistics import RewardStatistics
@@ -28,7 +28,7 @@ from utils.report import export_train_and_valid_reward
 
 import time
 from BERT_Discriminator import NetModel, NetModelMC, NLP_MODELS
-from Bert_Disc_train import build_kps_idx_list, build_src_idx_list, build_training_batch
+from Bert_Disc_train import build_kps_idx_list, build_src_idx_list, build_training_batch, shuffle_input_samples
 
 #####################################################################################################
 
@@ -37,7 +37,7 @@ torch.autograd.set_detect_anomaly(True)
 
 # #  batch_reward_stat, log_selected_token_dist = train_one_batch(batch, generator, optimizer_rl, opt, perturb_std)
 #########################################################
-def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_tokenizer, optimizer):
+def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_tokenizer, optimizer, bert_model_name):
     src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, _, \
     title, title_oov, title_lens, title_mask = one2many_batch
     one2many = opt.one2many
@@ -76,10 +76,6 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     pred_str_2dlist = sample_list_to_str_2dlist(sample_list, oov_lists, opt.idx2word, opt.vocab_size, eos_idx,
                                                 delimiter_word, opt.word2idx[pykp.io.UNK_WORD], opt.replace_unk,
                                                 src_str_list, opt.separate_present_absent, pykp.io.PEOS_WORD)
-    # print()  # gl: debug
-    # print()  # gl: debug
-    # print(pred_str_2dlist)  # gl: debug
-    # print(trg_str_2dlist)  # gl: debug
     # target_str_2dlist = convert_list_to_kphs(trg)
     sample_time = time_since(start_time)
 
@@ -131,54 +127,112 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     # print(src_str_list)  # gl: debug
     D_model.eval()
     with torch.no_grad():
-        pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt.separate_present_absent)
-        greedy_idx_list = build_kps_idx_list(greedy_str_2dlist, bert_tokenizer, opt.separate_present_absent)
-        src_idx_list = build_src_idx_list(src_str_list, bert_tokenizer)
-        # print(pred_idx_list)
-        # print(greedy_idx_list)
-        # print(src_idx_list)
-        # torch.save(pred_idx_list, 'prova/pred_idx_list.pt')  # gl saving tensors
-        # torch.save(target_idx_list, 'prova/target_idx_list.pt')  # gl saving tensors
 
-        pred_train_batch, pred_mask_batch, pred_segment_batch, _ = \
-            build_training_batch(src_idx_list, pred_idx_list, bert_tokenizer, opt, label=0)
-        greedy_train_batch, greedy_mask_batch, greedy_segment_batch, _ = \
-            build_training_batch(src_idx_list, greedy_idx_list, bert_tokenizer, opt, label=1)
+        if bert_model_name == 'BertForSequenceClassification':
 
-        # gl: only for seq. class; for multi choice add targets variables
-        pred_train_batch = torch.tensor(pred_train_batch, dtype=torch.long).to(devices)
-        pred_mask_batch = torch.tensor(pred_mask_batch, dtype=torch.long).to(devices)
-        pred_segment_batch = torch.tensor(pred_segment_batch, dtype=torch.long).to(devices)
-        pred_rewards = np.zeros(batch_size)
+            pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt.separate_present_absent)
+            greedy_idx_list = build_kps_idx_list(greedy_str_2dlist, bert_tokenizer, opt.separate_present_absent)
+            src_idx_list = build_src_idx_list(src_str_list, bert_tokenizer)
+
+            pred_train_batch, pred_mask_batch, pred_segment_batch, _ = \
+                build_training_batch(src_idx_list, pred_idx_list, bert_tokenizer, opt, label=0)
+            greedy_train_batch, greedy_mask_batch, greedy_segment_batch, _ = \
+                build_training_batch(src_idx_list, greedy_idx_list, bert_tokenizer, opt, label=0)
+
+            pred_train_batch = torch.tensor(pred_train_batch, dtype=torch.long).to(devices)
+            pred_mask_batch = torch.tensor(pred_mask_batch, dtype=torch.long).to(devices)
+            pred_segment_batch = torch.tensor(pred_segment_batch, dtype=torch.long).to(devices)
+            # # pred_rewards = np.zeros(batch_size)
+            # output_pre = D_model(pred_train_batch,
+            #                      attention_mask=pred_mask_batch,
+            #                      token_type_ids=pred_segment_batch,
+            #                      )
+            # # idx = 0
+            # # for val_p in output_pre[0]:
+            # #     pred_rewards[idx] = val_p.item()
+            # #     idx += 1
+            #
+            # pred_rewards = reward_function(output_pre[0], batch_size, bert_model_name)
+
+            greedy_train_batch = torch.tensor(greedy_train_batch, dtype=torch.long).to(devices)
+            greedy_mask_batch = torch.tensor(greedy_mask_batch, dtype=torch.long).to(devices)
+            greedy_segment_batch = torch.tensor(greedy_segment_batch, dtype=torch.long).to(devices)
+            # # baseline_rewards = np.zeros(batch_size)
+            # output_bas = D_model(greedy_train_batch,
+            #                      attention_mask=greedy_mask_batch,
+            #                      token_type_ids=greedy_segment_batch,
+            #                      )
+            # # idx = 0
+            # # for val_b in output_bas[0]:
+            # #     baseline_rewards[idx] = val_b.item()
+            # #     idx += 1
+            #
+            # baseline_rewards = reward_function(output_bas[0], batch_size, bert_model_name)
+
+        elif bert_model_name == 'BertForMultipleChoice':
+
+            pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt.separate_present_absent)
+            greedy_idx_list = build_kps_idx_list(greedy_str_2dlist, bert_tokenizer, opt.separate_present_absent)
+            trg_idx_list = build_kps_idx_list(trg_str_2dlist, bert_tokenizer, opt.separate_present_absent)
+            src_idx_list = build_src_idx_list(src_str_list, bert_tokenizer)
+
+            pred_train_batch, pred_mask_batch, pred_segment_batch, _ = \
+                build_training_batch(src_idx_list, pred_idx_list, bert_tokenizer, opt, label=0)
+            greedy_train_batch, greedy_mask_batch, greedy_segment_batch, _ = \
+                build_training_batch(src_idx_list, greedy_idx_list, bert_tokenizer, opt, label=0)
+            trg_train_batch, trg_mask_batch, trg_segment_batch, _ = \
+                build_training_batch(src_idx_list, trg_idx_list, bert_tokenizer, opt, label=1)
+
+            pred_train_batch, pred_mask_batch, pred_segment_batch, pred_labels = \
+                shuffle_input_samples(batch_size, pred_train_batch, trg_train_batch,
+                                      pred_mask_batch, trg_mask_batch,
+                                      pred_segment_batch, trg_segment_batch)
+
+            greedy_train_batch, greedy_mask_batch, greedy_segment_batch, greedy_labels = \
+                shuffle_input_samples(batch_size, greedy_train_batch, trg_train_batch,
+                                      greedy_mask_batch, trg_mask_batch,
+                                      greedy_segment_batch, trg_segment_batch)
+
+            pred_train_batch = torch.tensor(pred_train_batch, dtype=torch.long).to(devices)
+            # labels = torch.tensor(labels, dtype=torch.long).to(devices)
+            pred_mask_batch = torch.tensor(pred_mask_batch, dtype=torch.long).to(devices)
+            pred_segment_batch = torch.tensor(pred_segment_batch, dtype=torch.long).to(devices)
+
+            greedy_train_batch = torch.tensor(greedy_train_batch, dtype=torch.long).to(devices)
+            # labels = torch.tensor(labels, dtype=torch.long).to(devices)
+            greedy_mask_batch = torch.tensor(greedy_mask_batch, dtype=torch.long).to(devices)
+            greedy_segment_batch = torch.tensor(greedy_segment_batch, dtype=torch.long).to(devices)
+
         output_pre = D_model(pred_train_batch,
                              attention_mask=pred_mask_batch,
                              token_type_ids=pred_segment_batch,
                              )
-        idx = 0
-        for val_p in output_pre[0]:
-            pred_rewards[idx] = val_p.item()
-            idx += 1
+        pred_rewards = reward_function(output_pre[0], batch_size, bert_model_name, pred_labels)
+        # pred_rewards = reward_function(output_pre[0], batch_size, bert_model_name)
 
-        greedy_train_batch = torch.tensor(greedy_train_batch, dtype=torch.long).to(devices)
-        greedy_mask_batch = torch.tensor(greedy_mask_batch, dtype=torch.long).to(devices)
-        greedy_segment_batch = torch.tensor(greedy_segment_batch, dtype=torch.long).to(devices)
-        baseline_rewards = np.zeros(batch_size)
         output_bas = D_model(greedy_train_batch,
                              attention_mask=greedy_mask_batch,
                              token_type_ids=greedy_segment_batch,
                              )
-        idx = 0
-        for val_b in output_bas[0]:
-            baseline_rewards[idx] = val_b.item()
-            idx += 1
+        baseline_rewards = reward_function(output_bas[0], batch_size, bert_model_name, greedy_labels)
+        # baseline_rewards = reward_function(output_bas[0], batch_size, bert_model_name)
+
+    # for doc, target, prediction, reward in zip(src_str_list, trg_str_2dlist, pred_str_2dlist, pred_rewards):  # debug
+    #     print('doc        : ', doc)
+    #     print('target     : ', target)
+    #     print('prediction : ', prediction)
+    #     print('reward     : ', reward)
+    #     print()
 
     cumulative_reward_sum = pred_rewards.sum(0)
     # cumulative_bas_reward_sum = baseline_rewards.sum(0)
     batch_rewards = pred_rewards - baseline_rewards
     # torch.save(batch_rewards, 'prova/batch_rewards.pt')  # gl saving tensors
-    # print('pred_rewards     :' + str(pred_rewards))
-    # print('baseline_rewards :' + str(baseline_rewards))
-    # print('batch_rewards    :' + str(batch_rewards))
+    # print('pred_labels      : ', pred_labels)
+    # print('greedy_labels    : ', greedy_labels)
+    # print('pred_rewards     : ', pred_rewards)
+    # print('baseline_rewards : ', baseline_rewards)
+    # print('batch_rewards    : ', batch_rewards)
     q_value_estimate_array = np.tile(batch_rewards.reshape([-1, 1]), [1, max_pred_seq_len])  # [batch, max_pred_seq_len]
 
     q_value_estimate = torch.from_numpy(q_value_estimate_array).type(torch.FloatTensor).to(src.device)
@@ -259,13 +313,6 @@ def main(opt):
     final_perturb_std = opt.final_perturb_std
     perturb_decay_factor = opt.perturb_decay_factor
     perturb_decay_mode = opt.perturb_decay_mode
-    # hidden_dim = opt.D_hidden_dim
-    # embedding_dim = opt.D_embedding_dim
-    # n_layers = opt.D_layers
-    #
-    # hidden_dim = opt.D_hidden_dim
-    # embedding_dim = opt.D_embedding_dim
-    # n_layers = opt.D_layers
 
     bert_model = NLP_MODELS[opt.bert_model].choose()  # gl
     bert_model_name = bert_model.model.__class__.__name__
@@ -301,6 +348,7 @@ def main(opt):
     # D_model.load_state_dict(torch.load("Discriminator_checkpts/D_model_combined1.pth.tar"))
 
     print()
+    print("Training samples %d; Validation samples: %d" % (len(train_data_loader.sampler), len(valid_data_loader.sampler)))
     print("Beginning with training Generator")
     print("########################################################################################################")
     total_epochs = opt.epochs
@@ -327,7 +375,7 @@ def main(opt):
                 perturb_std = init_perturb_std * math.pow(perturb_decay_factor, math.floor((1 + total_batch) / 4000))
 
             batch_reward_stat, pg_loss = train_one_batch(D_model, batch, generator, opt, perturb_std, bert_tokenizer,
-                                                         PG_optimizer)
+                                                         PG_optimizer, bert_model_name)
             # pg_loss = train_one_batch(D_model, batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name)
             report_train_reward_statistics.update(batch_reward_stat)
             total_train_reward_statistics.update(batch_reward_stat)
@@ -345,7 +393,7 @@ def main(opt):
 
             # model.eval()
 
-            if total_batch % 20 == 0:
+            if total_batch % 20 == 0:  # gl: was 4000 with full dataset and batch_size=32 (=128k samples)
                 print("Epoch %d; batch: %d; total batch: %d" % (epoch, batch_i, total_batch))
                 sys.stdout.flush()
 
@@ -355,7 +403,7 @@ def main(opt):
                                 opt.checkpoint_interval > -1 and total_batch > 1 and total_batch % opt.checkpoint_interval == 0):
 
                     valid_reward_stat = evaluate_valid_reward(valid_data_loader, generator, opt, D_model,
-                                                              bert_tokenizer)
+                                                              bert_tokenizer, bert_model_name)
                     model.train()
                     current_valid_reward = valid_reward_stat.reward()
                     print("Enter check point!")
@@ -384,13 +432,13 @@ def main(opt):
                         print("Valid reward does not increase")
                         sys.stdout.flush()
                         num_stop_increasing += 1
-                        # # decay the learning rate by the factor specified by opt.learning_rate_decay
-                        # if opt.learning_rate_decay_rl:
-                        #     for i, param_group in enumerate(optimizer_rl.param_groups):
-                        #         old_lr = float(param_group['lr'])
-                        #         new_lr = old_lr * opt.learning_rate_decay
-                        #         if old_lr - new_lr > EPS:
-                        #             param_group['lr'] = new_lr
+                        # decay the learning rate by the factor specified by opt.learning_rate_decay
+                        if opt.learning_rate_decay_rl:
+                            for i, param_group in enumerate(PG_optimizer.param_groups):
+                                old_lr = float(param_group['lr'])
+                                new_lr = old_lr * opt.learning_rate_decay
+                                if old_lr - new_lr > EPS:
+                                    param_group['lr'] = new_lr
 
                     logging.info('Epoch: %d; batch idx: %d; total batches: %d' % (epoch, batch_i, total_batch))
                     logging.info(
@@ -409,8 +457,8 @@ def main(opt):
                     report_train_reward_statistics.clear()
 
     # export the training curve
-    # train_valid_curve_path = opt.exp_path + '/train_valid_curve'
-    train_valid_curve_path = 'exp/train_valid_curve'
+    train_valid_curve_path = opt.exp_path + '/train_valid_curve'
+    # train_valid_curve_path = 'exp/train_valid_curve'
     export_train_and_valid_reward(report_train_reward, report_valid_reward, opt.checkpoint_interval,
                                   train_valid_curve_path)
 
