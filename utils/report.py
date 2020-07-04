@@ -1,7 +1,7 @@
 import matplotlib
+
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
-import numpy as np
 
 
 def export_train_and_valid_reward(train_reward, valid_reward, plot_every, path):
@@ -39,8 +39,9 @@ def export_train_and_valid_loss(train_loss, valid_loss, train_ppl, valid_ppl, pl
 def concat_float_list(list, delimiter=','):
     return delimiter.join([str(l) for l in list])
 
+
 def plot_train_valid_curve(train_loss, valid_loss, plot_every, path, loss_label):
-    #plt.ioff()
+    # plt.ioff()
     title = "Training and validation %s for every %d iterations" % (loss_label.lower(), plot_every)
     plt.figure()
     plt.title(title)
@@ -53,11 +54,12 @@ def plot_train_valid_curve(train_loss, valid_loss, plot_every, path, loss_label)
     plt.legend()
     plt.savefig("%s_%s.pdf" % (path, loss_label.lower()))
 
+
 if __name__ == '__main__':
-    train_loss = [20.1,15.3,12.3,11.0,10.0]
-    valid_loss = [30.2,29.2,25.2,21.3,20.2]
-    train_ppl = [10.1,5.3,2.3,1.0,1.0]
-    valid_ppl = [20.2,19.2,15.2,11.3,10.2]
+    train_loss = [20.1, 15.3, 12.3, 11.0, 10.0]
+    valid_loss = [30.2, 29.2, 25.2, 21.3, 20.2]
+    train_ppl = [10.1, 5.3, 2.3, 1.0, 1.0]
+    valid_ppl = [20.2, 19.2, 15.2, 11.3, 10.2]
 
     plot_every = 4000
     path = '../exp/debug/valid_train_curve'
