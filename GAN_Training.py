@@ -17,13 +17,15 @@ import config
 from Disc_train import main as D_train
 from Bert_Disc_train import main as D_Bert_train
 # from Gen_RL_Train import main as G_train
-from Gen_RL_Train_new import main as G_train
-# from Gen_RL_Train_plus import main as G_train
+# from Gen_RL_Train_new import main as G_train
+from Gen_RL_Train_plus import main as G_train
 import torch
 import random
 import numpy as np
 import pykp
 from torch.backends import cudnn
+import logging
+import os
 
 
 def process_opt(opt):
@@ -78,6 +80,18 @@ def process_opt(opt):
         opt.delimiter_word = pykp.io.SEP_WORD
     else:
         opt.delimiter_word = pykp.io.EOS_WORD
+
+    # fill time into the name
+    if opt.exp_path.find('%s') > 0:
+        opt.exp_path = opt.exp_path % (opt.exp, opt.timemark)
+        # opt.model_path = opt.model_path % (opt.exp, opt.timemark)
+
+    if not os.path.exists(opt.exp_path) and opt.train_rl is True:
+        os.makedirs(opt.exp_path)
+    # if not os.path.exists(opt.model_path):
+    #     os.makedirs(opt.model_path)
+
+    logging.info('EXP_PATH : ' + opt.exp_path)
 
     return opt
 
