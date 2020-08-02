@@ -194,7 +194,8 @@ def reward_function(discriminator_output, batch_size, bert_model_name, labels=No
                 # print('labels[idx]  : ', labels[idx])
                 # print()
             else:
-                rewards[idx] = 1 - abs(val_b[0].item() - val_b[1].item())
+                # rewards[idx] = 1 - abs(val_b[0].item() - val_b[1].item())
+                rewards[idx] = np.exp(-abs(val_b[0].item() - val_b[1].item()))
         idx += 1
 
     return rewards
@@ -298,7 +299,8 @@ def evaluate_valid_reward(data_loader, generator, opt, D_model, bert_tokenizer, 
                              attention_mask=pred_mask_batch,
                              token_type_ids=pred_segment_batch,
                              )
-            final_reward = reward_function(output[0], batch_size, bert_model_name, labels)
+            # final_reward = reward_function(output[0], batch_size, bert_model_name, labels)
+            final_reward = reward_function(output[0], batch_size, bert_model_name)
 
             # final_reward = compute_batch_reward(pred_str_2dlist, trg_str_2dlist, batch_size, reward_type, topk,
             #                                     match_type, regularization_factor=0.0)  # np.array, [batch_size]

@@ -256,7 +256,7 @@ def shuffle_input_samples(batch_size, pred_train_batch, target_train_batch,
 def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name):
     # torch.save(one2many_batch, 'prova/one2many_batch.pt')  # gl saving tensors
     src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, \
-        _, title, title_oov, title_lens, title_mask = one2many_batch
+    _, title, title_oov, title_lens, title_mask = one2many_batch
     # print([len(d) for d in src_str_list])  # gl: debug
     # print('src_str_list   : ', src_str_list)  # gl: debug
     # print('trg_str_2dlist : ', trg_str_2dlist)  # gl: debug
@@ -364,11 +364,29 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         # torch.save(output, 'prova/output_multi.pt')  # gl saving tensors
         # assert labels.shape[0] == input_ids.shape[0], 'labels have to match input samples'
 
+        # i = 0
+        # for src_str, src_idx, trg_str, target_idx, pred_str, pred_idx in zip(src_str_list, src_idx_list, trg_str_2dlist,
+        #                                                                      target_idx_list, pred_str_2dlist,
+        #                                                                      pred_idx_list):
+        #     print(i)
+        #     print('src_str_list    : ', src_str)
+        #     print('src_idx_list    : ', src_idx)
+        #     print('trg_str_2dlist  : ', trg_str)
+        #     print('target_idx_list : ', target_idx)
+        #     print('pred_str_2dlist : ', pred_str)
+        #     print('pred_idx_list   : ', pred_idx)
+        #     print('scores          : ', output[1][i])
+        #     print('predicted       : ', torch.argmax(output[1][i], dim=0))
+        #     print('labels          : ', labels[i])
+        #     print()
+        #     i += 1
+
         # print('output[1] : ', output[1])
         # print('predicted : ', torch.argmax(output[1], dim=1))
         # print('labels    : ', labels)
         # print('positives : ', positives)
-        #
+        # print()
+
         # with torch.no_grad():
         #     for tensor_row in output[1]:
         #         reward1 = 1 - (tensor_row[0].item() - tensor_row[1].item()) ** 2
@@ -528,13 +546,6 @@ def main(opt):
 
     bert_tokenizer = bert_model.tokenizer
 
-    # # prova SpanBERT
-    # bert_model = AutoModel.from_pretrained("SpanBERT/spanbert-base-cased")
-    # bert_model_name = bert_model.base_model.__class__.__name__
-    # print(bert_model_name)
-    # D_model = AutoModelForSequenceClassification.from_pretrained('SpanBERT/spanbert-base-cased')
-    # bert_tokenizer = AutoTokenizer.from_pretrained("SpanBERT/spanbert-base-cased")
-
     # torch.save(bert_tokenizer.vocab, 'prova/vocab.pt')  # gl saving tensors
     # torch.save(bert_tokenizer.ids_to_tokens, 'prova/ids_to_tokens.pt')  # gl saving tensors
     if torch.cuda.is_available():
@@ -575,7 +586,8 @@ def main(opt):
     # D_optimizer = torch.optim.Adam(D_model.parameters(), opt.learning_rate)
 
     print()
-    print("Training samples %d; Validation samples: %d" % (len(train_data_loader.sampler), len(valid_data_loader.sampler)))
+    print("Training samples %d; Validation samples: %d" % (
+        len(train_data_loader.sampler), len(valid_data_loader.sampler)))
     print("Beginning with training Discriminator")
     print("########################################################################################################")
     total_epochs = opt.epochs  # gl: was 5

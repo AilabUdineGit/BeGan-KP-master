@@ -207,15 +207,15 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
                              attention_mask=pred_mask_batch,
                              token_type_ids=pred_segment_batch,
                              )
-        pred_rewards = reward_function(output_pre[0], batch_size, bert_model_name, pred_labels)
-        # pred_rewards = reward_function(output_pre[0], batch_size, bert_model_name)
+        # pred_rewards = reward_function(output_pre[0], batch_size, bert_model_name, pred_labels)
+        pred_rewards = reward_function(output_pre[0], batch_size, bert_model_name)
 
         output_bas = D_model(greedy_train_batch,
                              attention_mask=greedy_mask_batch,
                              token_type_ids=greedy_segment_batch,
                              )
-        baseline_rewards = reward_function(output_bas[0], batch_size, bert_model_name, greedy_labels)
-        # baseline_rewards = reward_function(output_bas[0], batch_size, bert_model_name)
+        # baseline_rewards = reward_function(output_bas[0], batch_size, bert_model_name, greedy_labels)
+        baseline_rewards = reward_function(output_bas[0], batch_size, bert_model_name)
 
     # for doc, target, prediction, reward in zip(src_str_list, trg_str_2dlist, pred_str_2dlist, pred_rewards):  # debug
     #     print('doc        : ', doc)
@@ -241,13 +241,13 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
 
     # compute the policy gradient objective
     # print('log_selected_token_dist  :' + str(log_selected_token_dist))
-    # print('output_mask              :' + str(output_mask))
+    # print('output_mask              :', output_mask)
     # print('q_value_estimate         :' + str(q_value_estimate))
     # print('q_value_estimate_array   :', q_value_estimate_array)  # gl: debug
-    print('cumulative_reward_sum    :' + str(cumulative_reward_sum))
+    print('cumulative_reward_sum    :', cumulative_reward_sum)
     # print('cumulative_bas_reward_sum:' + str(cumulative_bas_reward_sum))
     pg_loss = compute_pg_loss(log_selected_token_dist, output_mask, q_value_estimate)
-    print('pg_loss                  :' + str(pg_loss.item()))
+    print('pg_loss                  :', pg_loss.item())
 
     # back propagation to compute the gradient
     start_time = time.time()
