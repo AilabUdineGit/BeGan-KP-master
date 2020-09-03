@@ -172,7 +172,7 @@ def evaluate_reward(data_loader, generator, opt):
 
 def reward_function(discriminator_output, batch_size, bert_model_name, labels=None):
     """
-    Reward to use with BertForMultipleChoice
+    Reward function built from discriminator output
     :param: discriminator_output, pytorch tensor, the output of Discriminator
     :param: batch_size, int
     :param: bert_model_name, str, specific Bert model for Discriminator
@@ -284,7 +284,7 @@ def evaluate_valid_reward(data_loader, generator, opt, D_model, bert_tokenizer, 
                 trg_idx_list = build_kps_idx_list(trg_str_2dlist, bert_tokenizer, opt.separate_present_absent)
 
                 trg_train_batch, trg_mask_batch, trg_segment_batch, _ = \
-                    build_training_batch(src_idx_list, trg_idx_list, bert_tokenizer, opt, label=0)
+                    build_training_batch(src_idx_list, trg_idx_list, bert_tokenizer, opt, label=1)
 
                 pred_train_batch, pred_mask_batch, pred_segment_batch, labels = \
                     shuffle_input_samples(batch_size, pred_train_batch, trg_train_batch,
