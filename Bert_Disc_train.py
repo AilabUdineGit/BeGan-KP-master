@@ -115,7 +115,7 @@ def build_kps_idx_list(kps, bert_tokenizer, separate_present_absent):
                 if w == pykp.io.UNK_WORD:
                     w = '[UNK]'
                 elif w == pykp.io.PEOS_WORD:
-                    separate_present_absent = False  # gl: only for experiment8; to remove
+                    # separate_present_absent = False  # gl: only for experiment8; to remove
                     if separate_present_absent:
                         w = '.'
                     else:
