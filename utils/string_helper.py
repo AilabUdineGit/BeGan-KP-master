@@ -195,6 +195,10 @@ def split_word_list_by_delimiter(word_list, keyphrase_delimiter, include_present
                     tmp_pred_str_list.append(tmp_word_list)
                     tmp_word_list = []
                 tmp_pred_str_list.append([present_absent_delimiter])
+            else:  # gl: 13 august 2020
+                if len(tmp_word_list) > 0:
+                    tmp_pred_str_list.append(tmp_word_list)
+                    tmp_word_list = []
         else:
             tmp_word_list.append(word)
 

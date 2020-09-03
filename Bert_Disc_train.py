@@ -103,28 +103,38 @@ def build_kps_idx_list(kps, bert_tokenizer, separate_present_absent):
     """
     # str_kps_list = [[[opt.idx2word[w] for w in kp] for kp in b] for b in kps]
     # print()  # gl: debug
-    # print(kps)  # gl: debug
     str_list = []
     idx_list = []
     # for b in str_kps_list:
     for b in kps:
-        str_kps = '[SEP]'
+        # print(b)  # gl: debug
+        # str_kps = '[SEP]'  # original
+        str_kps = '[SEP] List of Keyphrases is: '
         for kp in b:
             for w in kp:
                 if w == pykp.io.UNK_WORD:
                     w = '[UNK]'
                 elif w == pykp.io.PEOS_WORD:
+                    # separate_present_absent = False  # gl: only for experiment8; to remove
                     if separate_present_absent:
                         w = '.'
                     else:
                         w = ''
                 str_kps += w + ' '
             if str_kps[-2] != '.':  # gl: if w=pykp.io.PEOS_WORD then no need for ;
-                str_kps += ';'
+                str_kps += ';'  # original
+                # str_kps += ','
         str_kps += '[SEP]'
-        str_kps = str_kps.replace('[SEP] ;', '[SEP] ')
-        str_kps = str_kps.replace(' ; ;', ' ;')
-        # print(str_kps) # gl: debug
+        str_kps = str_kps.replace('[SEP] ;', '[SEP] ')  # original
+        str_kps = str_kps.replace(' ; ;', ' ;')  # original
+        str_kps = str_kps.replace(' ;. ', ' . ')  # original
+        str_kps = str_kps.replace(' ;[SEP]', ' .[SEP]')  # original
+        str_kps = str_kps.replace(':  ;', ': ')
+        # str_kps = str_kps.replace('[SEP] ,', '[SEP] ')
+        # str_kps = str_kps.replace(' , ,', ' ,')
+        # str_kps = str_kps.replace(' ,. ', ' . ')
+        # str_kps = str_kps.replace(' ,[SEP]', ' .[SEP]')
+        # print(str_kps)  # gl: debug
         bert_str_kps = bert_tokenizer.tokenize(str_kps)
         str_list.append(bert_str_kps)
         idx_list.append(bert_tokenizer.convert_tokens_to_ids(bert_str_kps))  # rivedere bene
@@ -256,7 +266,7 @@ def shuffle_input_samples(batch_size, pred_train_batch, target_train_batch,
 def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name):
     # torch.save(one2many_batch, 'prova/one2many_batch.pt')  # gl saving tensors
     src, src_lens, src_mask, src_oov, oov_lists, src_str_list, trg_str_2dlist, trg, trg_oov, trg_lens, trg_mask, \
-    _, title, title_oov, title_lens, title_mask = one2many_batch
+        _, title, title_oov, title_lens, title_mask = one2many_batch
     # print([len(d) for d in src_str_list])  # gl: debug
     # print('src_str_list   : ', src_str_list)  # gl: debug
     # print('trg_str_2dlist : ', trg_str_2dlist)  # gl: debug
@@ -319,15 +329,15 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     if opt.only_absent:
         trg_str_2dlist = remove_present(trg_str_2dlist)  # gl: change the order of present/absent kps in target file
     # gl: 2. Bert tokens indexes
-    pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt.separate_present_absent)
-    target_idx_list = build_kps_idx_list(trg_str_2dlist, bert_tokenizer, opt.separate_present_absent)
-    src_idx_list = build_src_idx_list(src_str_list, bert_tokenizer)
-    # print('src_str_list    : ', src_str_list)
-    # print('src_idx_list    : ', src_idx_list)
-    # print('trg_str_2dlist  : ', trg_str_2dlist)
-    # print('target_idx_list : ', target_idx_list)
     # print('pred_str_2dlist : ', pred_str_2dlist)
+    pred_idx_list = build_kps_idx_list(pred_str_2dlist, bert_tokenizer, opt.separate_present_absent)
     # print('pred_idx_list   : ', pred_idx_list)
+    # print('trg_str_2dlist  : ', trg_str_2dlist)
+    target_idx_list = build_kps_idx_list(trg_str_2dlist, bert_tokenizer, opt.separate_present_absent)
+    # print('target_idx_list : ', target_idx_list)
+    # print('src_str_list    : ', src_str_list)
+    src_idx_list = build_src_idx_list(src_str_list, bert_tokenizer)
+    # print('src_idx_list    : ', src_idx_list)
     # print()
 
     # gl: 3. creare il batch di addestramento concatenando src sia con le fake che con le true KPs, limitando la lunghezza a 512 tokens e paddando
@@ -343,7 +353,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
             shuffle_input_samples(batch_size, pred_train_batch, target_train_batch,
                                   pred_mask_batch, target_mask_batch,
                                   pred_segment_batch, target_segment_batch)
-
+        # print('labels : ', labels)  # gl: debug
         input_ids = torch.tensor(input_ids, dtype=torch.long).to(devices)
         labels = torch.tensor(labels, dtype=torch.long).to(devices)
         input_mask = torch.tensor(input_mask, dtype=torch.long).to(devices)
@@ -535,13 +545,13 @@ def main(opt):
                                            num_labels=opt.bert_labels,
                                            output_hidden_states=True,
                                            output_attentions=False,
-                                           hidden_dropout_prob=0.1,
+                                           hidden_dropout_prob=0.1,  # gl: default=0.1
                                            )
     elif bert_model_name == 'BertForMultipleChoice':
         D_model = NetModelMC.from_pretrained(bert_model.pretrained_weights,
                                              output_hidden_states=True,
                                              output_attentions=False,
-                                             hidden_dropout_prob=0.1,
+                                             hidden_dropout_prob=0.1,  # gl: default=0.1
                                              )
 
     bert_tokenizer = bert_model.tokenizer

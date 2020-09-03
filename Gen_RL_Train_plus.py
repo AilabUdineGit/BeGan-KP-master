@@ -217,10 +217,12 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
         # baseline_rewards = reward_function(output_bas[0], batch_size, bert_model_name, greedy_labels)
         baseline_rewards = reward_function(output_bas[0], batch_size, bert_model_name)
 
-    # for doc, target, prediction, reward in zip(src_str_list, trg_str_2dlist, pred_str_2dlist, pred_rewards):  # debug
+    # for doc, target, prediction, reward, pred_train in \
+    #         zip(src_str_list, trg_str_2dlist, pred_str_2dlist, pred_rewards, pred_train_batch):  # debug
     #     print('doc        : ', doc)
     #     print('target     : ', target)
     #     print('prediction : ', prediction)
+    #     # print('tokenized  : ', pred_train)
     #     print('reward     : ', reward)
     #     print()
 
@@ -242,7 +244,7 @@ def train_one_batch(D_model, one2many_batch, generator, opt, perturb_std, bert_t
     # compute the policy gradient objective
     # print('log_selected_token_dist  :' + str(log_selected_token_dist))
     # print('output_mask              :', output_mask)
-    # print('q_value_estimate         :' + str(q_value_estimate))
+    # print('q_value_estimate         :', q_value_estimate)
     # print('q_value_estimate_array   :', q_value_estimate_array)  # gl: debug
     print('cumulative_reward_sum    :', cumulative_reward_sum)
     # print('cumulative_bas_reward_sum:' + str(cumulative_bas_reward_sum))
@@ -374,8 +376,8 @@ def main(opt):
             elif perturb_decay_mode == 2:  # steps decay
                 perturb_std = init_perturb_std * math.pow(perturb_decay_factor, math.floor((1 + total_batch) / 4000))
 
-            batch_reward_stat, pg_loss = train_one_batch(D_model, batch, generator, opt, perturb_std, bert_tokenizer,
-                                                         PG_optimizer, bert_model_name)
+            batch_reward_stat, log_selected_token_dist = train_one_batch(D_model, batch, generator, opt, perturb_std,
+                                                                         bert_tokenizer, PG_optimizer, bert_model_name)
             # pg_loss = train_one_batch(D_model, batch, generator, opt, perturb_std, bert_tokenizer, bert_model_name)
             report_train_reward_statistics.update(batch_reward_stat)
             total_train_reward_statistics.update(batch_reward_stat)
@@ -393,7 +395,7 @@ def main(opt):
 
             # model.eval()
 
-            if total_batch % 20 == 0:  # gl: was 4000 with full dataset and batch_size=32 (=128k samples)
+            if total_batch % 100 == 0:  # gl: was 4000; only affects the print of the log, not the early stopping (see below)
                 print("Epoch %d; batch: %d; total batch: %d" % (epoch, batch_i, total_batch))
                 sys.stdout.flush()
 
