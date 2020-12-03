@@ -395,7 +395,7 @@ def main(opt):
 
             # model.eval()
 
-            if total_batch % 100 == 0:  # gl: was 4000; only affects the print of the log, not the early stopping (see below)
+            if total_batch % 200 == 0:  # gl: was 4000; only affects the print of the log, not the early stopping (see below)
                 print("Epoch %d; batch: %d; total batch: %d" % (epoch, batch_i, total_batch))
                 sys.stdout.flush()
 

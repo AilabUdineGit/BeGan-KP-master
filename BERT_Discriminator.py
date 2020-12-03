@@ -28,7 +28,7 @@ class NetModel(BertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
-        self.loss_function = nn.BCEWithLogitsLoss()  # gl
+        # self.loss_function = nn.BCEWithLogitsLoss()  # gl
 
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
@@ -203,7 +203,7 @@ class NLPModel:
 
 
 NLP_MODELS = {  # models from transformers library
-    'BERT': NLPModel('BERT', BertTokenizer, BertForMultipleChoice, "bert-base-uncased"),  # BertForMultipleChoice, BertForSequenceClassification
+    'BERT': NLPModel('BERT', BertTokenizer, BertForSequenceClassification, "bert-base-uncased"),  # BertForMultipleChoice, BertForSequenceClassification
     # bert-large-uncased  gl: BertForSequenceClassification; BertForMultipleChoice
     'XLNet': NLPModel('XLNet', XLNetTokenizer, XLNetModel, "xlnet-large-uncased"),  # bert-base-cased
     'RoBERTa': NLPModel('Roberta', RobertaTokenizer, RobertaModel, "roberta-base"),

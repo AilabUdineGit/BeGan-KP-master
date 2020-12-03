@@ -383,7 +383,7 @@ def train_opts(parser):
                         choices=['noam'], help="Use a custom decay rate.")
     parser.add_argument('-warmup_steps', type=int, default=4000,
                         help="""Number of warmup steps for custom decay.""")
-    parser.add_argument('-checkpoint_interval', type=int, default=400,  # gl: was 4000
+    parser.add_argument('-checkpoint_interval', type=int, default=400,  # gl: was 4000; 400 for 20k data
                         help='Run validation and save model parameters at this interval.')
     # parser.add_argument('-run_valid_every', type=int, default=4000,
     #                    help="Run validation test at this interval (every run_valid_every batches)")
@@ -650,13 +650,15 @@ def bert_opts(parser):  # gl
                         help='Model from HuggingFace transformers (BERT, SpanBERT, ... )')
     parser.add_argument('-bert_labels', type=int, default=1,  # gl: only affects sequence classification, 1 is for regression
                         help='Labels for discriminator classification: 1 for regression, 2 for classification')
-    parser.add_argument('-bert_learning_rate', type=float, default=0.00002,  # gl: was 0.00004, then 0.00002
+    parser.add_argument('-bert_learning_rate', type=float, default=2e-5,  # gl: was 0.00004, then 0.00002
                         help='Learning rate for AdamW optimizer')
-    parser.add_argument('-bert_max_length', type=int, default=384,  # gl: 256 batch_size=5?; 320 batch_size=4; 384 batch_size=3; 512 batch_size=2
+    parser.add_argument('-bert_max_length', type=int, default=384,  # gl: 256 batch_size=10; 320 batch_size=4; 384 batch_size=5; 512 batch_size=2; was 384 with batch_size=5
                         help='Max length of Bert input')
     parser.add_argument('-use_bert_discriminator', action="store_true", default=True,
                         help='If is to use bert discriminator')
-    parser.add_argument('-bert_validation_batch_size', type=int, default=64,  # gl: was 32
+    parser.add_argument('-bert_validation_batch_size', type=int, default=128,  # gl: was 32, then 64
                         help='Batch size to use during validation')
-    parser.add_argument('-bert_early_stop_tolerance', type=int, default=2,
+    parser.add_argument('-bert_early_stop_tolerance', type=int, default=300,  # gl: was 3
                         help="Stop training if it doesn't improve any more for several rounds of validation")
+    parser.add_argument('-bert_accumulated_steps', type=int, default=25,  # gl: was 12
+                        help="Number of accumulated batches before optimization step; default 1 means no accumulation")

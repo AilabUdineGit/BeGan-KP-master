@@ -50,7 +50,13 @@ def plot_train_valid_curve(train_loss, valid_loss, plot_every, path, loss_label)
     num_checkpoints = len(train_loss)
     X = list(range(num_checkpoints))
     plt.plot(X, train_loss, label="training")
-    plt.plot(X, valid_loss, label="validation")
+    if len(train_loss) > len(valid_loss):
+        X2 = list(range(len(valid_loss)))
+        delta = len(X)/len(X2)
+        X2 = [x+delta-1 for x in [x*delta for x in X2]]
+        plt.plot(X2, valid_loss, "o-", label="validation")
+    else:
+        plt.plot(X, valid_loss, label="validation")
     plt.legend()
     plt.savefig("%s_%s.pdf" % (path, loss_label.lower()))
 

@@ -86,7 +86,8 @@ def process_opt(opt):
         opt.exp_path = opt.exp_path % (opt.exp, opt.timemark)
         # opt.model_path = opt.model_path % (opt.exp, opt.timemark)
 
-    if not os.path.exists(opt.exp_path) and opt.train_rl is True:
+    # if not os.path.exists(opt.exp_path) and opt.train_rl is True:
+    if not os.path.exists(opt.exp_path):  # gl: in questo modo crea la directory anche per il D training
         os.makedirs(opt.exp_path)
     # if not os.path.exists(opt.model_path):
     #     os.makedirs(opt.model_path)
